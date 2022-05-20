@@ -7,6 +7,8 @@ Created on Thu May 19 23:12:27 2022
 import argparse
 
 from copy import deepcopy
+from collections import defaultdict
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -19,45 +21,90 @@ from torch.distributions.uniform import Uniform
 from itertools import chain
 
 from auton_survival import datasets, preprocessing
-from lifelines.utils import concordance_index
+from sksurv.metrics import (
+    concordance_index_ipcw, brier_score, cumulative_dynamic_auc
+    )
 
 
-def validate_model(model, batcher):
-    
+def validate_model(model, batcher, times, et_tr, et_val):
+
     with torch.no_grad():
+        times_tensor = torch.tensor(times).to(args.device).double()
+
+        times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
+            train_dataloader.batch_size,-1
+            ).T
+
+        importance_sampler = Uniform(0, times_tensor)
+        t_samples_ = torch.transpose(
+            importance_sampler.sample(
+            (args.importance_samples,)
+            ),0,1
+            )
+
         loglikelihoods = []
-        cdfs = []
+        survival = []
         ts = []
         for (x, t, e) in batcher:
             importance_sampler = Uniform(0, t)
             t_samples = importance_sampler.sample(
-                (args.importance_samples*10,)
+                (args.importance_samples,)
                 ).T
-            
-            neg_logcdf = torch.mean(
-                    lambdann(x=x, t=t_samples).view(x.size(0), -1),
-                    -1)
-            
-            #this is an approximation to cdf - will neverbe exactly equal
-            cdfs.append(1 - neg_logcdf.exp())
-            ts.append(t)
-            
+
             loglikelihood = (
                 lambdann(x=x, t=t).log() * e
-                - neg_logcdf
+                - torch.mean(
+                    lambdann(x=x, t=t_samples).view(x.size(0), -1),
+                    -1)
                 ).mean()
-    
+
             loglikelihoods.append(loglikelihood.item())
-        
-        ts = torch.cat(ts)
-        ts = ts.topk(ts.size(0))[1].cpu().numpy()
-        
-        cdfs = torch.cat(cdfs)
-        cdfs = cdfs.topk(cdfs.size(0))[1].cpu().numpy()
-        
-        c_idx = concordance_index(ts, cdfs)
-        
-        return np.mean(loglikelihoods), c_idx
+
+            #For C-Index and Brier Score
+
+            survival_quantile = []
+            for i in range(len(times)):
+
+                neg_logcdf = torch.mean(
+                        lambdann(
+                            x=x,
+                            t=t_samples_[:x.size(0),:, i]).view(x.size(0), -1),
+                        -1)
+
+                survival_quantile.append(torch.exp(-neg_logcdf))
+
+            survival_quantile = torch.stack(survival_quantile, -1)
+            survival.append(survival_quantile)
+            ts.append(t)
+
+        ts = torch.cat(ts).cpu().numpy()
+        survival = torch.cat(survival).cpu().numpy()
+        risk = 1 - survival
+
+        cis = []
+        brs = []
+        for i, _ in enumerate(times):
+            cis.append(
+                concordance_index_ipcw(
+                    et_tr, et_val, risk[:, i], times[i]
+                    )[0]
+                )
+
+        brs.append(
+            brier_score(
+                et_tr, et_val, survival, times
+                )[1]
+            )
+
+        roc_auc = []
+        for i, _ in enumerate(times):
+            roc_auc.append(
+                cumulative_dynamic_auc(
+                    et_tr, et_val, risk[:, i], times[i]
+                    )[0]
+                )
+
+        return np.mean(loglikelihoods), cis, brs, roc_auc
 
 
 class SurvivalData(torch.utils.data.Dataset):
@@ -82,7 +129,7 @@ class SurvivalData(torch.utils.data.Dataset):
 
             self._cache[index] = list(self.ds[index])
 
-            if self.cuda:
+            if 'cuda' in self.cuda:
 
                 self._cache[index][0] = self._cache[
                     index][0].cuda(non_blocking=True)
@@ -128,7 +175,7 @@ class LambdaNN(nn.Module):
             )
         self.feature_net.pop(-1)
         self.feature_net = nn.Sequential(*self.feature_net)
-        
+
         self.time_net = list(
                 chain(
                     *[
@@ -165,7 +212,7 @@ class LambdaNN(nn.Module):
                 )
             )
         self.shared_net.pop(-1)
-        self.shared_net = nn.Sequential(*self.shared_net)   
+        self.shared_net = nn.Sequential(*self.shared_net)
 
     def forward(self, x, t):
 
@@ -216,11 +263,10 @@ if __name__ == '__main__':
         )
 
     x, t, e = features, outcomes.time, outcomes.event
+    n = len(x)
 
     horizons = [0.25, 0.5, 0.75]
     times = np.quantile(t[e==1], horizons).tolist()
-
-    n = len(x)
 
     tr_size = int(n*0.70)
     vl_size = int(n*0.10)
@@ -230,6 +276,27 @@ if __name__ == '__main__':
     t_tr, t_te, t_val = t[:tr_size], t[-te_size:], t[tr_size:tr_size+vl_size]
     e_tr, e_te, e_val = e[:tr_size], e[-te_size:], e[tr_size:tr_size+vl_size]
 
+    et_tr = np.array(
+        [
+            (e_tr.values[i], t_tr.values[i]) for i in range(len(e_tr))
+            ],
+                     dtype = [('e', bool), ('t', float)]
+                     )
+
+    et_te = np.array(
+        [
+            (e_te.values[i], t_te.values[i]) for i in range(len(e_te))
+            ],
+                     dtype = [('e', bool), ('t', float)]
+                     )
+
+    et_val = np.array(
+        [
+            (e_val.values[i], t_val.values[i]) for i in range(len(e_val))
+            ],
+                     dtype = [('e', bool), ('t', float)]
+                     )
+
     d_in = x_tr.shape[1]
     d_out = 1
     d_hid = d_in//2
@@ -238,9 +305,15 @@ if __name__ == '__main__':
         d_in, d_out, d_hid, args.n_layers, p=args.dropout
         ).to(args.device)
 
-    train_data = SurvivalData(x_tr.values, t_tr.values, e_tr.values, 'cuda')
-    valid_data = SurvivalData(x_val.values, t_val.values, e_val.values, 'cuda')
-    test_data = SurvivalData(x_te.values, t_te.values, e_te.values, 'cuda')
+    train_data = SurvivalData(
+        x_tr.values, t_tr.values, e_tr.values, args.device
+        )
+    valid_data = SurvivalData(
+        x_val.values, t_val.values, e_val.values, args.device
+        )
+    test_data = SurvivalData(
+        x_te.values, t_te.values, e_te.values, args.device
+        )
 
     train_dataloader = DataLoader(
         train_data, batch_size=args.batch_size, shuffle=True
@@ -253,23 +326,25 @@ if __name__ == '__main__':
         )
 
     optimizer = optim.Adam(lambdann.parameters(), lr=args.lr)
-
+    
+    epoch_losses = defaultdict(list)
+    
     epoch_tr_loglikelihoods = []
     epoch_val_loglikelihoods = []
     epoch_c_idxes = []
-    
+
     tr_loglikelihood = - np.inf
     val_loglikelihood = - np.inf
     c_idx = - np.inf
-    
+
     for epoch in range(args.epochs):
 
         print("Epoch: {}, LL_train: {}, LL_valid: {}".format(
             epoch, tr_loglikelihood, val_loglikelihood)
             )
+        
         lambdann.train()
         tr_loglikelihoods = []
-
         for (x, t, e) in train_dataloader:
 
             optimizer.zero_grad()
@@ -285,38 +360,56 @@ if __name__ == '__main__':
                 ).mean()
 
             tr_loglikelihoods.append(train_loglikelihood.item())
+            
             #minimize negative loglikelihood
-            (-train_loglikelihood).backward() 
+            (-train_loglikelihood).backward()
             optimizer.step()
-
-        #validate
+                
         tr_loglikelihood = np.mean(tr_loglikelihoods)
-        val_loglikelihood, c_idx = validate_model(
-            lambdann.eval(), valid_dataloader
+        
+        print("\nValidating Model...")
+        #validate the model
+        val_loglikelihood, cis, brs, roc_auc = validate_model(
+            lambdann.eval(), valid_dataloader, times, et_tr, et_val
             )
 
-        epoch_tr_loglikelihoods.append(tr_loglikelihood)
-        epoch_val_loglikelihoods.append(val_loglikelihood)
-        epoch_c_idxes.append(c_idx)
-        
-        if epoch_val_loglikelihoods[-1] == max(epoch_val_loglikelihoods):
+        for horizon in enumerate(horizons):
+            print(f"For {horizon[1]} quantile,")
+            print("TD Concordance Index:", cis[horizon[0]])
+            print("Brier Score:", brs[0][horizon[0]])
+            print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
+
+        epoch_losses['LL_train'].append(tr_loglikelihood)
+        epoch_losses['LL_valid'].append(val_loglikelihood)
+        epoch_losses['C-Index 0.25 quantile'].append(cis[0])
+        epoch_losses['C-Index 0.5 quantile'].append(cis[1])
+        epoch_losses['C-Index 0.75 quantile'].append(cis[2])
+
+        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
             best_lambdann = deepcopy(lambdann)
 
     fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(14,5))
 
-    ax[0].plot(epoch_tr_loglikelihoods[3:], color='b', label="LL_train")
+    ax[0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
     ax_twin = ax[0].twinx()
-    ax_twin.plot(epoch_val_loglikelihoods[3:], color='r', label="LL_valid")
+    ax_twin.plot(epoch_losses['LL_valid'], color='r', label="LL_valid")
     ax[0].legend(loc="upper left")
     ax_twin.legend(loc="upper right")
-    ax[1].plot(epoch_c_idxes[3:], color='g', label="C-Index")
-    ax[1].legend(loc="upper left")
-    
-print("Evaluating Best Model...")
-test_loglikelihood, c_idx = validate_model(
-    lambdann.eval(), test_dataloader
-    )
-print("Test Loglikelihood: {}, Test C-Index: {}".format(
-    test_loglikelihood, c_idx
-    )
-    )
+    color = ['r', 'g', 'b']
+    i = 0
+    for (key, value) in epoch_losses.items():
+        if 'C-Index' in key:
+            ax[1].plot(value, color=color[i], label=key)
+            ax[1].legend(loc="upper left")
+            i += 1
+            
+print("\nEvaluating Best Model...")
+test_loglikelihood, cis, brs, roc_auc = validate_model(
+            lambdann.eval(), test_dataloader, times, et_tr, et_te
+            )
+print("Test Loglikelihood: {}".format(test_loglikelihood))
+for horizon in enumerate(horizons):
+    print(f"For {horizon[1]} quantile,")
+    print("TD Concordance Index:", cis[horizon[0]])
+    print("Brier Score:", brs[0][horizon[0]])
+    print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
