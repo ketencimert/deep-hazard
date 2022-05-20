@@ -373,36 +373,51 @@ if __name__ == '__main__':
             lambdann.eval(), valid_dataloader, times, et_tr, et_val
             )
 
+        epoch_losses['LL_train'].append(tr_loglikelihood)
+        epoch_losses['LL_valid'].append(val_loglikelihood)
+
+        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
+            best_lambdann = deepcopy(lambdann)
+
         for horizon in enumerate(horizons):
             print(f"For {horizon[1]} quantile,")
             print("TD Concordance Index:", cis[horizon[0]])
             print("Brier Score:", brs[0][horizon[0]])
             print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
+            epoch_losses[
+                'C-Index {} quantile'.format(horizon[1])
+                ].append(cis[horizon[0]])
+            epoch_losses[
+                'Brier Score {} quantile'.format(horizon[1])
+                ].append(brs[0][horizon[0]])
+            epoch_losses[
+                'ROC AUC {} quantile'.format(horizon[1])
+                ].append(roc_auc[horizon[0]][0])
 
-        epoch_losses['LL_train'].append(tr_loglikelihood)
-        epoch_losses['LL_valid'].append(val_loglikelihood)
-        epoch_losses['C-Index 0.25 quantile'].append(cis[0])
-        epoch_losses['C-Index 0.5 quantile'].append(cis[1])
-        epoch_losses['C-Index 0.75 quantile'].append(cis[2])
-
-        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
-            best_lambdann = deepcopy(lambdann)
-
-    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(14,5))
-
-    ax[0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
-    ax_twin = ax[0].twinx()
+    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14,5))
+    ax[0][0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
+    ax_twin = ax[0][0].twinx()
     ax_twin.plot(epoch_losses['LL_valid'], color='r', label="LL_valid")
-    ax[0].legend(loc="upper left")
+    ax[0][0].legend(loc="upper left")
     ax_twin.legend(loc="upper right")
     color = ['r', 'g', 'b']
     i = 0
+    j = 0
+    k = 0
     for (key, value) in epoch_losses.items():
         if 'C-Index' in key:
-            ax[1].plot(value, color=color[i], label=key)
-            ax[1].legend(loc="upper left")
+            ax[0][1].plot(value, color=color[i], label=key)
+            ax[0][1].legend(loc="upper left")
             i += 1
-            
+        elif 'Brier' in key:
+            ax[1][0].plot(value, color=color[j], label=key)
+            ax[1][0].legend(loc="upper left")
+            j += 1
+        elif 'ROC' in key:
+            ax[1][1].plot(value, color=color[k], label=key)
+            ax[1][1].legend(loc="upper left")
+            k += 1
+
 print("\nEvaluating Best Model...")
 test_loglikelihood, cis, brs, roc_auc = validate_model(
             lambdann.eval(), test_dataloader, times, et_tr, et_te
