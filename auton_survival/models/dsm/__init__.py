@@ -251,7 +251,7 @@ class DSMBase():
 
     maxrisk = int(np.nanmax(e_train.cpu().numpy()))
     model = self._gen_torch_model(inputdim, optimizer, risks=maxrisk)
-    model, _ = train_dsm(model,
+    model, loss = train_dsm(model,
                          x_train, t_train, e_train,
                          x_val, t_val, e_val,
                          n_iter=iters,
@@ -262,7 +262,7 @@ class DSMBase():
     self.torch_model = model.eval()
     self.fitted = True
 
-    return self
+    return self, loss
 
 
   def compute_nll(self, x, t, e):

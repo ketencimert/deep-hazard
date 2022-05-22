@@ -55,7 +55,7 @@ def validate_model(model, batcher, times, et_tr, et_val):
                 lambdann(x=x, t=t).log() * e
                 - torch.mean(
                     lambdann(x=x, t=t_samples).view(x.size(0), -1),
-                    -1)
+                    -1) * t
                 ).mean()
 
             loglikelihoods.append(loglikelihood.item())
@@ -153,10 +153,16 @@ class SurvivalData(torch.utils.data.Dataset):
 
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
-                 p=0.3, dtype=torch.double):
+                 p=0.3, batchnorm=True, dtype=torch.double):
         super().__init__()
 
-        act_fn = nn.ReLU()
+        act_fn = {
+            'relu':nn.ReLU(), 
+            'elu':nn.ELU(), 
+            'selu':nn.SELU(), 
+            'silu':nn.SiLU()
+            }[activation]
+
         self.feature_net = list(
                 chain(
                     *[
@@ -167,12 +173,18 @@ class LambdaNN(nn.Module):
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
+                            nn.Identity() if not batchnorm else nn.BatchNorm1d(
+                                d_in if ii + 1 == n_layers else d_hid,
+                                dtype=dtype,
+                                # affine=False
+                                ),
                             nn.Dropout(p)
                         ]
                         for ii in range(n_layers)
                     ]
                 )
             )
+        self.feature_net.pop(-1)
         self.feature_net.pop(-1)
         self.feature_net = nn.Sequential(*self.feature_net)
 
@@ -186,12 +198,18 @@ class LambdaNN(nn.Module):
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
+                            nn.Identity() if not batchnorm else nn.BatchNorm1d(
+                                d_in if ii + 1 == n_layers else d_hid,
+                                dtype=dtype,
+                                # affine=False
+                                ),
                             nn.Dropout(p)
                         ]
                         for ii in range(n_layers)
                     ]
                 )
             )
+        self.time_net.pop(-1)
         self.time_net.pop(-1)
         self.time_net = nn.Sequential(*self.time_net)
 
@@ -205,12 +223,18 @@ class LambdaNN(nn.Module):
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
+                            nn.Identity() if not batchnorm else nn.BatchNorm1d(
+                                d_in if ii + 1 == n_layers else d_hid,
+                                dtype=dtype,
+                                # affine=False
+                                ),
                             nn.Dropout(p)
                         ]
                         for ii in range(n_layers)
                     ]
                 )
             )
+        self.shared_net.pop(-1)
         self.shared_net.pop(-1)
         self.shared_net = nn.Sequential(*self.shared_net)
 
@@ -235,25 +259,21 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     #optimization args
     parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--wd', default=1e-5, type=float)
     parser.add_argument('--epochs', default=400, type=int)
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--importance_samples', default=100, type=int)
     #model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int)
-    parser.add_argument('--dropout', default=0.3, type=float)
+    parser.add_argument('--dropout', default=0.5, type=float)
+    parser.add_argument('--d_hid', default=100, type=int)
+    parser.add_argument('--activation', default='relu', type=str)
+    parser.add_argument('--batchnorm', default=True)
     args = parser.parse_args()
 
     outcomes, features = datasets.load_dataset("SUPPORT")
 
-    cat_feats = [
-        'sex',
-        'dzgroup',
-        'dzclass',
-        'income',
-        'race',
-        'ca'
-        ]
-
+    cat_feats = ['sex', 'dzgroup', 'dzclass', 'income', 'race', 'ca']
     num_feats = [key for key in features.keys() if key not in cat_feats]
 
     features = preprocessing.Preprocessor().fit_transform(
@@ -299,10 +319,11 @@ if __name__ == '__main__':
 
     d_in = x_tr.shape[1]
     d_out = 1
-    d_hid = d_in//2
-
+    d_hid = d_in // 2 if args.d_hid is None else args.d_hid
+    
     lambdann =  LambdaNN(
-        d_in, d_out, d_hid, args.n_layers, p=args.dropout
+        d_in, d_out, d_hid, args.n_layers, p=args.dropout, 
+        batchnorm=args.batchnorm, activation=args.activation
         ).to(args.device)
 
     train_data = SurvivalData(
@@ -325,10 +346,12 @@ if __name__ == '__main__':
         test_data, batch_size=args.batch_size, shuffle=False
         )
 
-    optimizer = optim.Adam(lambdann.parameters(), lr=args.lr)
-    
+    optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
+                           weight_decay=args.wd
+                           )
+
     epoch_losses = defaultdict(list)
-    
+
     epoch_tr_loglikelihoods = []
     epoch_val_loglikelihoods = []
     epoch_c_idxes = []
@@ -342,7 +365,7 @@ if __name__ == '__main__':
         print("Epoch: {}, LL_train: {}, LL_valid: {}".format(
             epoch, tr_loglikelihood, val_loglikelihood)
             )
-        
+
         lambdann.train()
         tr_loglikelihoods = []
         for (x, t, e) in train_dataloader:
@@ -360,13 +383,13 @@ if __name__ == '__main__':
                 ).mean()
 
             tr_loglikelihoods.append(train_loglikelihood.item())
-            
+
             #minimize negative loglikelihood
             (-train_loglikelihood).backward()
             optimizer.step()
-                
+
         tr_loglikelihood = np.mean(tr_loglikelihoods)
-        
+
         print("\nValidating Model...")
         #validate the model
         val_loglikelihood, cis, brs, roc_auc = validate_model(
@@ -375,9 +398,6 @@ if __name__ == '__main__':
 
         epoch_losses['LL_train'].append(tr_loglikelihood)
         epoch_losses['LL_valid'].append(val_loglikelihood)
-
-        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
-            best_lambdann = deepcopy(lambdann)
 
         for horizon in enumerate(horizons):
             print(f"For {horizon[1]} quantile,")
@@ -394,12 +414,16 @@ if __name__ == '__main__':
                 'ROC AUC {} quantile'.format(horizon[1])
                 ].append(roc_auc[horizon[0]][0])
 
+        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
+            print("Saving Best Model...")
+            best_lambdann = deepcopy(lambdann)
+
     fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14,5))
     ax[0][0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
     ax_twin = ax[0][0].twinx()
     ax_twin.plot(epoch_losses['LL_valid'], color='r', label="LL_valid")
-    ax[0][0].legend(loc="upper left")
-    ax_twin.legend(loc="upper right")
+    ax[0][0].legend(loc="center right")
+    ax_twin.legend(loc="lower right")
     color = ['r', 'g', 'b']
     i = 0
     j = 0
@@ -407,7 +431,7 @@ if __name__ == '__main__':
     for (key, value) in epoch_losses.items():
         if 'C-Index' in key:
             ax[0][1].plot(value, color=color[i], label=key)
-            ax[0][1].legend(loc="upper left")
+            ax[0][1].legend(loc="center right")
             i += 1
         elif 'Brier' in key:
             ax[1][0].plot(value, color=color[j], label=key)
@@ -415,7 +439,7 @@ if __name__ == '__main__':
             j += 1
         elif 'ROC' in key:
             ax[1][1].plot(value, color=color[k], label=key)
-            ax[1][1].legend(loc="upper left")
+            ax[1][1].legend(loc="center right")
             k += 1
 
 print("\nEvaluating Best Model...")
