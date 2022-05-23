@@ -17,6 +17,7 @@ from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.uniform import Uniform
+from torch.distributions.normal import Normal
 
 from itertools import chain
 
@@ -162,18 +163,20 @@ class LambdaNN(nn.Module):
             'selu':nn.SELU(),
             'silu':nn.SiLU()
             }
-        
+
         act_fn = act_fn[activation]
-        
+
         norm_fn = {
             'layer':nn.LayerNorm(d_hid, dtype=dtype),
             'batch':nn.BatchNorm1d(d_hid, dtype=dtype)
             }
-        
+
         if norm in norm_fn.keys():
             norm_fn = norm_fn[norm]
         else:
             norm = False
+
+        self.noise = nn.Dropout(p)
 
         self.feature_net = list(
                 chain(
@@ -181,7 +184,7 @@ class LambdaNN(nn.Module):
                         [
                             nn.Linear(
                                 d_in if ii == 0 else d_hid,
-                                d_in if ii + 1 == n_layers else d_hid,
+                                d_hid if ii + 1 == n_layers else d_hid,
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
@@ -192,8 +195,8 @@ class LambdaNN(nn.Module):
                     ]
                 )
             )
-        self.feature_net.pop(-1)
-        self.feature_net.pop(-1)
+        # self.feature_net.pop(-1)
+        # self.feature_net.pop(-1)
         self.feature_net = nn.Sequential(*self.feature_net)
 
         self.time_net = list(
@@ -202,7 +205,7 @@ class LambdaNN(nn.Module):
                         [
                             nn.Linear(
                                 1 if ii == 0 else d_hid,
-                                d_in if ii + 1 == n_layers else d_hid,
+                                d_hid if ii + 1 == n_layers else d_hid,
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
@@ -213,8 +216,8 @@ class LambdaNN(nn.Module):
                     ]
                 )
             )
-        self.time_net.pop(-1)
-        self.time_net.pop(-1)
+        # self.time_net.pop(-1)
+        # self.time_net.pop(-1)
         self.time_net = nn.Sequential(*self.time_net)
 
         self.shared_net = list(
@@ -222,7 +225,7 @@ class LambdaNN(nn.Module):
                     *[
                         [
                             nn.Linear(
-                                int(2*d_in) if ii == 0 else d_hid,
+                                int(2*d_hid) if ii == 0 else d_hid,
                                 d_out if ii + 1 == n_layers else d_hid,
                                 dtype=dtype
                             ),
@@ -240,7 +243,13 @@ class LambdaNN(nn.Module):
 
     def forward(self, x, t):
 
+        x = self.noise(x)
         x = self.feature_net(x)
+
+        if self.training:
+
+            t = Normal(loc=t, scale=1).sample()
+
         t = self.time_net(t.reshape(-1,1))
 
         if x.size(0) != t.size(0):
@@ -260,13 +269,13 @@ if __name__ == '__main__':
     #optimization args
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
-    parser.add_argument('--epochs', default=400, type=int)
+    parser.add_argument('--epochs', default=1000, type=int)
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--importance_samples', default=100, type=int)
     #model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int)
     parser.add_argument('--dropout', default=0.5, type=float)
-    parser.add_argument('--d_hid', default=100, type=int)
+    parser.add_argument('--d_hid', default=200, type=int)
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer')
     args = parser.parse_args()
@@ -444,7 +453,7 @@ if __name__ == '__main__':
 
 print("\nEvaluating Best Model...")
 test_loglikelihood, cis, brs, roc_auc = validate_model(
-            lambdann.eval(), test_dataloader, times, et_tr, et_te
+            best_lambdann.eval(), test_dataloader, times, et_tr, et_te
             )
 print("Test Loglikelihood: {}".format(test_loglikelihood))
 for horizon in enumerate(horizons):
