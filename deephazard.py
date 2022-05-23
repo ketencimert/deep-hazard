@@ -153,15 +153,27 @@ class SurvivalData(torch.utils.data.Dataset):
 
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
-                 p=0.3, batchnorm=True, dtype=torch.double):
+                 p=0.3, norm=False, dtype=torch.double):
         super().__init__()
 
         act_fn = {
-            'relu':nn.ReLU(), 
-            'elu':nn.ELU(), 
-            'selu':nn.SELU(), 
+            'relu':nn.ReLU(),
+            'elu':nn.ELU(),
+            'selu':nn.SELU(),
             'silu':nn.SiLU()
-            }[activation]
+            }
+        
+        act_fn = act_fn[activation]
+        
+        norm_fn = {
+            'layer':nn.LayerNorm(d_hid, dtype=dtype),
+            'batch':nn.BatchNorm1d(d_hid, dtype=dtype)
+            }
+        
+        if norm in norm_fn.keys():
+            norm_fn = norm_fn[norm]
+        else:
+            norm = False
 
         self.feature_net = list(
                 chain(
@@ -173,11 +185,7 @@ class LambdaNN(nn.Module):
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
-                            nn.Identity() if not batchnorm else nn.BatchNorm1d(
-                                d_in if ii + 1 == n_layers else d_hid,
-                                dtype=dtype,
-                                # affine=False
-                                ),
+                            nn.Identity() if not norm else norm_fn,
                             nn.Dropout(p)
                         ]
                         for ii in range(n_layers)
@@ -198,11 +206,7 @@ class LambdaNN(nn.Module):
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
-                            nn.Identity() if not batchnorm else nn.BatchNorm1d(
-                                d_in if ii + 1 == n_layers else d_hid,
-                                dtype=dtype,
-                                # affine=False
-                                ),
+                            nn.Identity() if not norm else norm_fn,
                             nn.Dropout(p)
                         ]
                         for ii in range(n_layers)
@@ -223,11 +227,7 @@ class LambdaNN(nn.Module):
                                 dtype=dtype
                             ),
                             nn.Identity() if ii + 1 == n_layers else act_fn,
-                            nn.Identity() if not batchnorm else nn.BatchNorm1d(
-                                d_in if ii + 1 == n_layers else d_hid,
-                                dtype=dtype,
-                                # affine=False
-                                ),
+                            nn.Identity() if not norm else norm_fn,
                             nn.Dropout(p)
                         ]
                         for ii in range(n_layers)
@@ -258,7 +258,7 @@ if __name__ == '__main__':
     #device args
     parser.add_argument('--device', default='cuda', type=str)
     #optimization args
-    parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
     parser.add_argument('--epochs', default=400, type=int)
     parser.add_argument('--batch_size', default=256, type=int)
@@ -268,7 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', default=0.5, type=float)
     parser.add_argument('--d_hid', default=100, type=int)
     parser.add_argument('--activation', default='relu', type=str)
-    parser.add_argument('--batchnorm', default=True)
+    parser.add_argument('--norm', default='layer')
     args = parser.parse_args()
 
     outcomes, features = datasets.load_dataset("SUPPORT")
@@ -320,10 +320,10 @@ if __name__ == '__main__':
     d_in = x_tr.shape[1]
     d_out = 1
     d_hid = d_in // 2 if args.d_hid is None else args.d_hid
-    
+
     lambdann =  LambdaNN(
-        d_in, d_out, d_hid, args.n_layers, p=args.dropout, 
-        batchnorm=args.batchnorm, activation=args.activation
+        d_in, d_out, d_hid, args.n_layers, p=args.dropout,
+        norm=args.norm, activation=args.activation
         ).to(args.device)
 
     train_data = SurvivalData(
