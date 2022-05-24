@@ -195,8 +195,8 @@ class LambdaNN(nn.Module):
                     ]
                 )
             )
-        # self.feature_net.pop(-1)
-        # self.feature_net.pop(-1)
+        self.feature_net.pop(-1)
+        self.feature_net.pop(-1)
         self.feature_net = nn.Sequential(*self.feature_net)
 
         self.time_net = list(
@@ -216,8 +216,8 @@ class LambdaNN(nn.Module):
                     ]
                 )
             )
-        # self.time_net.pop(-1)
-        # self.time_net.pop(-1)
+        self.time_net.pop(-1)
+        self.time_net.pop(-1)
         self.time_net = nn.Sequential(*self.time_net)
 
         self.shared_net = list(
