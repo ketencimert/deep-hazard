@@ -27,10 +27,10 @@ from sksurv.metrics import (
     )
 
 
-def validate_model(model, batcher, times, et_tr, et_val):
+def evaluate_model(model, batcher, quantiles, train, valid):
 
     with torch.no_grad():
-        times_tensor = torch.tensor(times).to(args.device).double()
+        times_tensor = torch.tensor(quantiles).to(args.device).double()
 
         times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
             train_dataloader.batch_size,-1
@@ -53,9 +53,9 @@ def validate_model(model, batcher, times, et_tr, et_val):
                 ).T
 
             loglikelihood = (
-                lambdann(x=x, t=t).log() * e
+                model(x=x, t=t).log() * e
                 - torch.mean(
-                    lambdann(x=x, t=t_samples).view(x.size(0), -1),
+                    model(x=x, t=t_samples).view(x.size(0), -1),
                     -1) * t
                 ).mean()
 
@@ -66,13 +66,13 @@ def validate_model(model, batcher, times, et_tr, et_val):
             survival_quantile = []
             for i in range(len(times)):
 
-                neg_logcdf = torch.mean(
-                        lambdann(
+                int_lambdann = torch.mean(
+                        model(
                             x=x,
                             t=t_samples_[:x.size(0),:, i]).view(x.size(0), -1),
-                        -1)
+                        -1) * times[i]
 
-                survival_quantile.append(torch.exp(-neg_logcdf))
+                survival_quantile.append(torch.exp(-int_lambdann))
 
             survival_quantile = torch.stack(survival_quantile, -1)
             survival.append(survival_quantile)
@@ -87,13 +87,13 @@ def validate_model(model, batcher, times, et_tr, et_val):
         for i, _ in enumerate(times):
             cis.append(
                 concordance_index_ipcw(
-                    et_tr, et_val, risk[:, i], times[i]
+                    train, valid, risk[:, i], times[i]
                     )[0]
                 )
 
         brs.append(
             brier_score(
-                et_tr, et_val, survival, times
+                train, valid, survival, times
                 )[1]
             )
 
@@ -101,7 +101,7 @@ def validate_model(model, batcher, times, et_tr, et_val):
         for i, _ in enumerate(times):
             roc_auc.append(
                 cumulative_dynamic_auc(
-                    et_tr, et_val, risk[:, i], times[i]
+                    train, valid, risk[:, i], times[i]
                     )[0]
                 )
 
@@ -401,7 +401,7 @@ if __name__ == '__main__':
 
         print("\nValidating Model...")
         #validate the model
-        val_loglikelihood, cis, brs, roc_auc = validate_model(
+        val_loglikelihood, cis, brs, roc_auc = evaluate_model(
             lambdann.eval(), valid_dataloader, times, et_tr, et_val
             )
 
@@ -452,7 +452,7 @@ if __name__ == '__main__':
             k += 1
 
 print("\nEvaluating Best Model...")
-test_loglikelihood, cis, brs, roc_auc = validate_model(
+test_loglikelihood, cis, brs, roc_auc = evaluate_model(
             best_lambdann.eval(), test_dataloader, times, et_tr, et_te
             )
 print("Test Loglikelihood: {}".format(test_loglikelihood))
