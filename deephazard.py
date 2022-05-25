@@ -30,7 +30,7 @@ from sksurv.metrics import (
 def evaluate_model(model, batcher, quantiles, train, valid):
 
     with torch.no_grad():
-        times_tensor = torch.tensor(quantiles).to(args.device).double()
+        times_tensor = torch.tensor(quantiles, dtype=dtype).to(args.device)
 
         times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
             train_dataloader.batch_size,-1
@@ -267,11 +267,12 @@ if __name__ == '__main__':
     #device args
     parser.add_argument('--device', default='cuda', type=str)
     #optimization args
+    parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
     parser.add_argument('--epochs', default=1000, type=int)
     parser.add_argument('--batch_size', default=256, type=int)
-    parser.add_argument('--importance_samples', default=100, type=int)
+    parser.add_argument('--importance_samples', default=256, type=int)
     #model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int)
     parser.add_argument('--dropout', default=0.5, type=float)
@@ -279,6 +280,11 @@ if __name__ == '__main__':
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer')
     args = parser.parse_args()
+
+    dtype = {
+        'float64':torch.double,
+        'float32':torch.float,
+        }[args.dtype]
 
     outcomes, features = datasets.load_dataset("SUPPORT")
 
@@ -336,13 +342,13 @@ if __name__ == '__main__':
         ).to(args.device)
 
     train_data = SurvivalData(
-        x_tr.values, t_tr.values, e_tr.values, args.device
+        x_tr.values, t_tr.values, e_tr.values, args.device, dtype
         )
     valid_data = SurvivalData(
-        x_val.values, t_val.values, e_val.values, args.device
+        x_val.values, t_val.values, e_val.values, args.device, dtype
         )
     test_data = SurvivalData(
-        x_te.values, t_te.values, e_te.values, args.device
+        x_te.values, t_te.values, e_te.values, args.device, dtype
         )
 
     train_dataloader = DataLoader(
@@ -461,3 +467,5 @@ for horizon in enumerate(horizons):
     print("TD Concordance Index:", cis[horizon[0]])
     print("Brier Score:", brs[0][horizon[0]])
     print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
+    
+torch.save(best_lambdann, './best_lambdann.pth')
