@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cpu', type=str)
     parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--importance_samples', default=256, type=int)
-    parser.add_argument('--sample', default=0, type=int)
+    parser.add_argument('--sample', default=6001, type=int)
     args = parser.parse_args()
 
     dtype = {
@@ -54,37 +54,46 @@ if __name__ == '__main__':
         )
 
     x, t, e = features, outcomes.time, outcomes.event
-    
+
+    time_line = range(1, t.max())
+
     with torch.no_grad():
+
+        best_lambdann = torch.load(
+            './best_lambdann.pth'
+            ).eval().to(args.device)
     
-        x = torch.tensor(x.values[args.sample], dtype=dtype).to(args.device)   
-        time_line = range(1, t.max())
-        
-        best_lambdann = torch.load('./best_lambdann.pth').eval()
-    
-        density = []
-    
-        for time in time_line:
+        for i in range(args.sample):
             
-            t = torch.tensor([time], dtype=dtype).to(args.device)
-            t = t.view(1,1)
-            x = x.view(1,-1)
-    
-            importance_sampler = Uniform(0, t)
-            t_samples = importance_sampler.sample((args.importance_samples,)).T
-    
-            density.append(
-                torch.exp(
-                    best_lambdann(x=x, t=t).log()
-                    - torch.mean(
-                        best_lambdann(x=x, t=t_samples).view(x.size(0), -1),
-                        -1) * t
-                    ).squeeze(-1)
-                )
+            x_ = torch.tensor(x.values[i], dtype=dtype).to(args.device)   
         
-        density = torch.cat(density)
-    
-        plt.plot(density.detach().cpu().numpy(), color='b')
+            density = []
         
+            for time in time_line:
+                
+                t_ = torch.tensor([time], dtype=dtype).to(args.device)
+                t_ = t_.view(1,1)
+                x_ = x_.view(1,-1)
+        
+                importance_sampler = Uniform(0, t_)
+                t_samples = importance_sampler.sample(
+                    (args.importance_samples,)
+                    ).T
+        
+                density.append(
+                    torch.exp(
+                        best_lambdann(x=x_, t=t_).log()
+                        - torch.mean(
+                            best_lambdann(x=x_, t=t_samples).view(x_.size(0), -1),
+                            -1) * t_
+                        ).squeeze(-1)
+                    )
+            
+            density = torch.cat(density)
+            plt.title('Data Point: {}'.format(i))
+            plt.xlabel('Time')
+            plt.ylabel('Frequency')
+            plt.plot(density.detach().cpu().numpy(), color='b')
+            plt.show()
     
     

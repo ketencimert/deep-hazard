@@ -457,15 +457,15 @@ if __name__ == '__main__':
             ax[1][1].legend(loc="center right")
             k += 1
 
-print("\nEvaluating Best Model...")
-test_loglikelihood, cis, brs, roc_auc = evaluate_model(
-            best_lambdann.eval(), test_dataloader, times, et_tr, et_te
-            )
-print("Test Loglikelihood: {}".format(test_loglikelihood))
-for horizon in enumerate(horizons):
-    print(f"For {horizon[1]} quantile,")
-    print("TD Concordance Index:", cis[horizon[0]])
-    print("Brier Score:", brs[0][horizon[0]])
-    print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
-    
-torch.save(best_lambdann, './best_lambdann.pth')
+    print("\nEvaluating Best Model...")
+    test_loglikelihood, cis, brs, roc_auc = evaluate_model(
+                best_lambdann.eval(), test_dataloader, times, et_tr, et_te
+                )
+    print("Test Loglikelihood: {}".format(test_loglikelihood))
+    for horizon in enumerate(horizons):
+        print(f"For {horizon[1]} quantile,")
+        print("TD Concordance Index:", cis[horizon[0]])
+        print("Brier Score:", brs[0][horizon[0]])
+        print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
+        
+    torch.save(best_lambdann, './best_lambdann.pth')
