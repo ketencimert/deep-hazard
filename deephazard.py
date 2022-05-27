@@ -468,4 +468,4 @@ if __name__ == '__main__':
         print("Brier Score:", brs[0][horizon[0]])
         print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
         
-    torch.save(best_lambdann, './best_lambdann.pth')
+    torch.save(best_lambdann, './saves/best_lambdann.pth')

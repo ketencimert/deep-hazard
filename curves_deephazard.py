@@ -60,7 +60,7 @@ if __name__ == '__main__':
     with torch.no_grad():
 
         best_lambdann = torch.load(
-            './best_lambdann.pth'
+            './saves/best_lambdann.pth'
             ).eval()
         best_lambdann = best_lambdann.to(args.device)
         for i in range(0, args.sample):

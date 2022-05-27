@@ -535,4 +535,4 @@ if __name__ == '__main__':
         print("Brier Score:", brs[0][horizon[0]])
         print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
 
-    torch.save(best_deephazardmixture, './best_deephazardmixture.pth')
+    torch.save(best_deephazardmixture, './saves/best_deephazardmixture.pth')

@@ -56,14 +56,14 @@ if __name__ == '__main__':
 
     x, t, e = features, outcomes.time, outcomes.event
 
-    time_line = range(1, t.max())
+    time_line = range(1, t.max() // 2)
 
     with torch.no_grad():
 
-        # best_lambdann = torch.load(
-        #     './best_lambdann.pth'
-        #     ).eval()
-        best_lambdann = best_lambdann.to(args.device)
+        best_deephazardmixture = torch.load(
+            './saves/best_deephazardmixture.pth'
+            ).eval()
+        best_deephazardmixture = best_deephazardmixture.to(args.device)
         for i in range(0, args.sample):
 
             x_ = torch.tensor(x.values[i], dtype=dtype).to(args.device)
@@ -81,18 +81,22 @@ if __name__ == '__main__':
                     (args.importance_samples,)
                     ).T
 
-                loglikelihood = []
-                for j in range(args.mixture_size):
-
-                    loglikelihood.append(
-                        best_lambdann[j](x=x_, t=t_).log().squeeze(-1)
-                        - torch.mean(
-                            best_lambdann[j](x=x_, t=t_samples).view(x_.size(0), -1),
-                            -1) * t_
-                        )
+                loglikelihood = [
+                    best_deephazardmixture(c=j, x=x_, t=t_).log().squeeze(-1)
+                    - torch.mean(
+                        best_deephazardmixture(
+                            c=j, 
+                            x=x_, 
+                            t=t_samples
+                            ).view(x_.size(0), -1),
+                        -1) * t_
+                    for j in range(args.mixture_size)
+                    ]
 
                 loglikelihood = torch.stack(loglikelihood, -1)
-                posterior = loglikelihood - loglikelihood.logsumexp(-1).view(-1,1)
+                posterior = loglikelihood - loglikelihood.logsumexp(
+                    -1
+                    ).view(-1,1)
                 posterior = posterior.exp()
                 loglikelihood = torch.sum(
                 loglikelihood.exp() * posterior, -1
