@@ -63,10 +63,10 @@ def evaluate_model(model, batcher, quantiles, train, valid):
                 ]
 
             loglikelihood = torch.stack(loglikelihood, -1)
-            
+
             posterior = loglikelihood - loglikelihood.logsumexp(-1).view(-1,1)
             posterior = posterior.exp()
-            
+
             loglikelihood = torch.sum(
                 loglikelihood.exp() * posterior, -1
                 ).log()
@@ -319,13 +319,14 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=1000, type=int)
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--importance_samples', default=256, type=int)
-    #model, encoder-decoder args
+    #model
     parser.add_argument('--n_layers', default=2, type=int)
     parser.add_argument('--dropout', default=0.5, type=float)
     parser.add_argument('--d_hid', default=200, type=int)
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer', type=str)
     parser.add_argument('--mixture_size', default=4, type=int)
+    parser.add_argument('--save_metric', default='LL_valid', type=str)
     args = parser.parse_args()
 
     dtype = {
@@ -389,7 +390,7 @@ if __name__ == '__main__':
         ).to(args.device) for _ in range(args.mixture_size)
         ]
     deephazardmixture = DeepHazardMixture(lambdanns)
-    
+
     train_data = SurvivalData(
         x_tr.values, t_tr.values, e_tr.values, args.device, dtype
         )
@@ -439,10 +440,15 @@ if __name__ == '__main__':
             importance_sampler = Uniform(0, t)
             t_samples = importance_sampler.sample((args.importance_samples,)).T
 
-            train_loglikelihood = [(
+            train_loglikelihood = [
+                (
                 deephazardmixture(c=i, x=x, t=t).log().squeeze(-1) * e
                 - torch.mean(
-                    deephazardmixture(c=i, x=x, t=t_samples).view(x.size(0), -1),
+                    deephazardmixture(
+                        c=i,
+                        x=x,
+                        t=t_samples
+                        ).view(x.size(0), -1),
                     -1) * t
                 )
                 for i in range(args.mixture_size)
@@ -495,7 +501,9 @@ if __name__ == '__main__':
                 'ROC AUC {} quantile'.format(horizon[1])
                 ].append(roc_auc[horizon[0]][0])
 
-        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
+        if epoch_losses[args.save_metric][-1] == max(
+                epoch_losses[args.save_metric]
+                ):
             print("Saving Best Model...")
             best_deephazardmixture = deepcopy(deephazardmixture)
 
@@ -525,7 +533,7 @@ if __name__ == '__main__':
 
     print("\nEvaluating Best Model...")
     test_loglikelihood, cis, brs, roc_auc = evaluate_model(
-                best_deephazardmixture.eval(), 
+                best_deephazardmixture.eval(),
                 test_dataloader, times, et_tr, et_te
                 )
     print("Test Loglikelihood: {}".format(test_loglikelihood))

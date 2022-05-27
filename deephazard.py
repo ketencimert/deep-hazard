@@ -279,6 +279,7 @@ if __name__ == '__main__':
     parser.add_argument('--d_hid', default=200, type=int)
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer')
+    parser.add_argument('--save_metric', default='LL_valid', type=str)
     args = parser.parse_args()
 
     dtype = {
@@ -429,7 +430,9 @@ if __name__ == '__main__':
                 'ROC AUC {} quantile'.format(horizon[1])
                 ].append(roc_auc[horizon[0]][0])
 
-        if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
+        if epoch_losses[args.save_metric][-1] == max(
+                epoch_losses[args.save_metric]
+                ):
             print("Saving Best Model...")
             best_lambdann = deepcopy(lambdann)
 
@@ -467,5 +470,5 @@ if __name__ == '__main__':
         print("TD Concordance Index:", cis[horizon[0]])
         print("Brier Score:", brs[0][horizon[0]])
         print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
-        
+
     torch.save(best_lambdann, './saves/best_lambdann.pth')
