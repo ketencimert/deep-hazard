@@ -30,8 +30,8 @@ from sksurv.metrics import (
 def evaluate_model(model, batcher, quantiles, train, valid):
 
     with torch.no_grad():
-        times_tensor = torch.tensor(quantiles, dtype=dtype).to(args.device)
 
+        times_tensor = torch.tensor(quantiles, dtype=dtype).to(args.device)
         times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
             train_dataloader.batch_size,-1
             ).T
