@@ -62,8 +62,8 @@ if __name__ == '__main__':
 
         # best_lambdann = torch.load(
         #     './best_lambdann.pth'
-        #     ).eval().to(args.device)
-
+        #     ).eval()
+        best_lambdann = best_lambdann.to(args.device)
         for i in range(0, args.sample):
 
             x_ = torch.tensor(x.values[i], dtype=dtype).to(args.device)

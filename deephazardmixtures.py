@@ -51,61 +51,62 @@ def evaluate_model(model, batcher, quantiles, train, valid):
             t_samples = importance_sampler.sample(
                 (args.importance_samples,)
                 ).T
-            
-            loglikelihood = []
-            for j in range(args.mixture_size):
-            
-                loglikelihood.append((
-                    model[j](x=x, t=t).log().squeeze(-1)  * e
-                    - torch.mean(
-                        model[j](x=x, t=t_samples).view(x.size(0), -1),
-                        -1) * t
-                    )
-                    )
+
+            loglikelihood = [
+                (
+                model(c=j, x=x, t=t).log().squeeze(-1)  * e
+                - torch.mean(
+                    model(c=j, x=x, t=t_samples).view(x.size(0), -1),
+                    -1) * t
+                )
+                for j in range(args.mixture_size)
+                ]
 
             loglikelihood = torch.stack(loglikelihood, -1)
+            
             posterior = loglikelihood - loglikelihood.logsumexp(-1).view(-1,1)
             posterior = posterior.exp()
+            
             loglikelihood = torch.sum(
                 loglikelihood.exp() * posterior, -1
-                )
+                ).log()
             loglikelihood = loglikelihood.mean()
-            
             loglikelihoods.append(loglikelihood.item())
 
             #For C-Index and Brier Score
 
             survival_quantile = []
             for i in range(len(times)):
-                
-                int_lambdann = []
-                loglikelihood = []
-                
-                for j in range(args.mixture_size):
-                    
-                    int_lambdann.append(
-                        torch.mean(
-                        model[j](
-                            x=x,
-                            t=t_samples_[:x.size(0),:, i]).view(x.size(0), -1),
-                        -1) * times[i]
-                        )
-                    
-                    loglikelihood.append((
-                        model[j](x=x, t=t).log().squeeze(-1)  * e
-                        - torch.mean(
-                            model[j](x=x, t=t_samples).view(x.size(0), -1),
-                            -1) * t
-                        )
-                        )
-                
+
+                int_lambdann = [
+                    torch.mean(
+                    model(
+                        c=j,
+                        x=x,
+                        t=t_samples_[:x.size(0),:, i]).view(x.size(0), -1),
+                    -1) * times[i]
+                    for j in range(args.mixture_size)
+                    ]
+
+                loglikelihood = [
+                    (
+                    model(c=j, x=x, t=t).log().squeeze(-1)  * e
+                    - torch.mean(
+                        model(c=j, x=x, t=t_samples).view(x.size(0), -1),
+                        -1) * t
+                    )
+                    for j in range(args.mixture_size)
+                    ]
+
                 loglikelihood = torch.stack(loglikelihood, -1)
-                posterior = loglikelihood - loglikelihood.logsumexp(-1).view(-1,1)
+                posterior = loglikelihood - loglikelihood.logsumexp(
+                    -1
+                    ).view(-1,1)
                 posterior = posterior.exp()
-                
+
                 int_lambdann = torch.stack(int_lambdann, -1)
                 int_lambdann = torch.sum(posterior * int_lambdann, -1)
-                
+
                 survival_quantile.append(torch.exp(-int_lambdann))
 
             survival_quantile = torch.stack(survival_quantile, -1)
@@ -295,6 +296,17 @@ class LambdaNN(nn.Module):
         return nn.Softplus()(z)
 
 
+class DeepHazardMixture(nn.Module):
+    def __init__(self, lambdanns):
+        super().__init__()
+
+        self.lambdanns = nn.ModuleList(lambdanns)
+
+    def forward(self, c, x, t):
+
+        return self.lambdanns[c](x, t)
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -371,13 +383,13 @@ if __name__ == '__main__':
     d_out = 1
     d_hid = d_in // 2 if args.d_hid is None else args.d_hid
 
-    lambdann =  nn.ModuleList([LambdaNN(
+    lambdanns =  [LambdaNN(
         d_in, d_out, d_hid, args.n_layers, p=args.dropout,
         norm=args.norm, activation=args.activation
         ).to(args.device) for _ in range(args.mixture_size)
         ]
-        )
-
+    deephazardmixture = DeepHazardMixture(lambdanns)
+    
     train_data = SurvivalData(
         x_tr.values, t_tr.values, e_tr.values, args.device, dtype
         )
@@ -398,7 +410,7 @@ if __name__ == '__main__':
         test_data, batch_size=args.batch_size, shuffle=False
         )
 
-    optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
+    optimizer = optim.Adam(deephazardmixture.parameters(), lr=args.lr,
                            weight_decay=args.wd
                            )
 
@@ -418,7 +430,7 @@ if __name__ == '__main__':
             epoch, tr_loglikelihood, val_loglikelihood)
             )
 
-        [lambdann_.train() for lambdann_ in lambdann]
+        deephazardmixture.train()
         tr_loglikelihoods = []
         for (x, t, e) in train_dataloader:
 
@@ -427,21 +439,20 @@ if __name__ == '__main__':
             importance_sampler = Uniform(0, t)
             t_samples = importance_sampler.sample((args.importance_samples,)).T
 
-            train_loglikelihood = []
-
-            for i in range(args.mixture_size):
-
-                train_loglikelihood.append((
-                    lambdann[i](x=x, t=t).log().squeeze(-1) * e
-                    - torch.mean(
-                        lambdann[i](x=x, t=t_samples).view(x.size(0), -1),
-                        -1) * t
-                    )
-                    )
+            train_loglikelihood = [(
+                deephazardmixture(c=i, x=x, t=t).log().squeeze(-1) * e
+                - torch.mean(
+                    deephazardmixture(c=i, x=x, t=t_samples).view(x.size(0), -1),
+                    -1) * t
+                )
+                for i in range(args.mixture_size)
+                ]
 
             train_loglikelihood = torch.stack(train_loglikelihood, -1)
 
-            posterior = train_loglikelihood - train_loglikelihood.logsumexp(-1).view(-1,1)
+            posterior = train_loglikelihood - train_loglikelihood.logsumexp(
+                -1
+                ).view(-1,1)
             posterior = posterior.exp()
 
             elbo = torch.sum(train_loglikelihood * posterior, -1)
@@ -449,7 +460,8 @@ if __name__ == '__main__':
 
             train_loglikelihood = torch.sum(
                 train_loglikelihood.exp() * posterior, -1
-                )
+                ).log()
+
             train_loglikelihood = train_loglikelihood.mean()
             tr_loglikelihoods.append(train_loglikelihood.item())
 
@@ -462,7 +474,7 @@ if __name__ == '__main__':
         print("\nValidating Model...")
         #validate the model
         val_loglikelihood, cis, brs, roc_auc = evaluate_model(
-            lambdann.eval(), valid_dataloader, times, et_tr, et_val
+            deephazardmixture.eval(), valid_dataloader, times, et_tr, et_val
             )
 
         epoch_losses['LL_train'].append(tr_loglikelihood)
@@ -485,7 +497,7 @@ if __name__ == '__main__':
 
         if epoch_losses['LL_valid'][-1] == max(epoch_losses['LL_valid']):
             print("Saving Best Model...")
-            best_lambdann = deepcopy(lambdann)
+            best_deephazardmixture = deepcopy(deephazardmixture)
 
     fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14,5))
     ax[0][0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
@@ -513,7 +525,8 @@ if __name__ == '__main__':
 
     print("\nEvaluating Best Model...")
     test_loglikelihood, cis, brs, roc_auc = evaluate_model(
-                best_lambdann.eval(), test_dataloader, times, et_tr, et_te
+                best_deephazardmixture.eval(), 
+                test_dataloader, times, et_tr, et_te
                 )
     print("Test Loglikelihood: {}".format(test_loglikelihood))
     for horizon in enumerate(horizons):
@@ -522,4 +535,4 @@ if __name__ == '__main__':
         print("Brier Score:", brs[0][horizon[0]])
         print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
 
-    torch.save(best_lambdann, './best_lambdannmixture.pth')
+    torch.save(best_deephazardmixture, './best_deephazardmixture.pth')
