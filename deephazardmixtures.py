@@ -460,6 +460,7 @@ if __name__ == '__main__':
                 -1
                 ).view(-1,1)
             posterior = posterior.exp()
+            posterior = posterior.detach()
 
             elbo = torch.sum(train_loglikelihood * posterior, -1)
             elbo = elbo.mean()
