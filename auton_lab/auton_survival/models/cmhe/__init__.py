@@ -228,8 +228,8 @@ class DeepCoxMixturesHeterogenousEffects:
 
     model = self._gen_torch_model(inputdim, optimizer)
 
-    model, _ = train_cmhe(model,
-                          (x_tr, t_tr, e_tr, a_tr),
+    model, loss = train_cmhe(model,
+                         (x_tr, t_tr, e_tr, a_tr),
                           (x_vl, t_vl, e_vl, a_vl),
                           epochs=iters,
                           lr=learning_rate,
@@ -240,7 +240,7 @@ class DeepCoxMixturesHeterogenousEffects:
     self.torch_model = (model[0].eval(), model[1])
     self.fitted = True
 
-    return self
+    return self, loss
 
   def predict_risk(self, x, a, t=None):
 

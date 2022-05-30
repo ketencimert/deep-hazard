@@ -15,12 +15,13 @@ from itertools import chain
 class DeepHazardMixture(nn.Module):
     def __init__(self, lambdanns):
         super().__init__()
-
         self.lambdanns = nn.ModuleList(lambdanns)
 
     def forward(self, c, x, t):
-
         return self.lambdanns[c](x, t)
+
+    def mixture_size(self):
+        return len(self.lambdanns)
 
 
 class LambdaNN(nn.Module):

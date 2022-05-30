@@ -67,7 +67,7 @@ class DeepCoxPH:
 
   """
 
-  def __init__(self, layers=None):
+  def __init__(self, layers=None, **extras):
 
     self.layers = layers
     self.fitted = False
@@ -122,7 +122,7 @@ class DeepCoxPH:
 
   def fit(self, x, t, e, vsize=0.15, val_data=None,
           iters=1, learning_rate=1e-3, batch_size=100,
-          optimizer="Adam", random_state=100):
+          optimizer="Adam", random_state=100, **extras):
 
     r"""This method is used to train an instance of the DSM model.
 

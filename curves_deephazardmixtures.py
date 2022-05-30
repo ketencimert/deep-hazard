@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.distributions.uniform import Uniform
 
-from auton_survival import datasets, preprocessing
+from auton_lab.auton_survival import datasets, preprocessing
 
 from models import LambdaNN, DeepHazardMixture
 
@@ -23,7 +23,6 @@ if __name__ == '__main__':
     parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--importance_samples', default=256, type=int)
     parser.add_argument('--sample', default=6001, type=int)
-    parser.add_argument('--mixture_size', default=4, type=int)
     args = parser.parse_args()
 
     dtype = {
@@ -44,7 +43,7 @@ if __name__ == '__main__':
 
     x, t, e = features, outcomes.time, outcomes.event
 
-    time_line = range(1, t.max() // 2)
+    time_line = range(1, 2 * t.max() // 3)
 
     with torch.no_grad():
 
@@ -52,6 +51,9 @@ if __name__ == '__main__':
             './saves/best_deephazardmixture.pth'
             ).eval()
         best_deephazardmixture = best_deephazardmixture.to(args.device)
+        
+        mixture_size = best_deephazardmixture.mixture_size()
+        
         for i in range(0, args.sample):
 
             x_ = torch.tensor(x.values[i], dtype=dtype).to(args.device)
@@ -78,7 +80,7 @@ if __name__ == '__main__':
                             t=t_samples
                             ).view(x_.size(0), -1),
                         -1) * t_
-                    for j in range(args.mixture_size)
+                    for j in range(mixture_size)
                     ]
 
                 loglikelihood = torch.stack(loglikelihood, -1)

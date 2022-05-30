@@ -181,7 +181,7 @@ class DSMBase():
   """Base Class for all DSM models"""
 
   def __init__(self, k=3, layers=None, distribution="Weibull",
-               temp=1000., discount=1.0):
+               temp=1000., discount=1.0, **extras):
     self.k = k
     self.layers = layers
     self.dist = distribution
@@ -202,7 +202,7 @@ class DSMBase():
 
   def fit(self, x, t, e, vsize=0.15, val_data=None,
           iters=1, learning_rate=1e-3, batch_size=100,
-          elbo=True, optimizer="Adam", random_state=100):
+          elbo=True, optimizer="Adam", random_state=100, **extras):
 
     r"""This method is used to train an instance of the DSM model.
 

@@ -88,7 +88,7 @@ class DeepCoxMixtures:
   """
 
   def __init__(self, k=3, layers=None, gamma=1,
-               smoothing_factor=1e-2, use_activation=False):
+               smoothing_factor=1e-2, use_activation=False, **extras):
 
     self.k = k
     self.layers = layers
@@ -150,7 +150,7 @@ class DeepCoxMixtures:
 
   def fit(self, x, t, e, vsize=0.15, val_data=None,
           iters=1, learning_rate=1e-3, batch_size=100,
-          optimizer="Adam", random_state=100):
+          optimizer="Adam", random_state=100, **extras):
 
     r"""This method is used to train an instance of the DSM model.
 
@@ -193,7 +193,7 @@ class DeepCoxMixtures:
 
     model = self._gen_torch_model(inputdim, optimizer)
 
-    model, _ = train_dcm(model,
+    model, loss = train_dcm(model,
                          (x_train, t_train, e_train),
                          (x_val, t_val, e_val),
                          epochs=iters,
@@ -206,7 +206,7 @@ class DeepCoxMixtures:
     self.torch_model = (model[0].eval(), model[1])
     self.fitted = True
 
-    return self
+    return self, loss
 
 
   def predict_survival(self, x, t):

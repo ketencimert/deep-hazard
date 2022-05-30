@@ -14,8 +14,11 @@ from sklearn.model_selection import ParameterGrid
 from sksurv.metrics import concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 from tqdm import tqdm
 
-from auton_survival import datasets, preprocessing
-from auton_survival.models.dsm import DeepSurvivalMachines
+from auton_lab.auton_survival import datasets, preprocessing
+from auton_lab.auton_survival.models.dsm import DeepSurvivalMachines
+from auton_lab.auton_survival.models.cph import DeepCoxPH
+from auton_lab.auton_survival.models.dcm import DeepCoxMixtures
+from auton_lab.auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
 
 if __name__ == '__main__':
@@ -28,13 +31,25 @@ if __name__ == '__main__':
     parser.add_argument('--model', default='dsm', type=str)
 
     args = parser.parse_args()
-
-    param_grid = {'k' : [3, 4, 6],
-                  'distribution' : ['LogNormal', 'Weibull'],
-                  'learning_rate' : [ 1e-4, 1e-3],
-                  'layers' : [ [50], [50, 50], [100], [100, 100] ],
-                  'discount': [ 1/2, 3/4, 1 ]
-                 }
+    
+    model = {
+        'dsm':DeepSurvivalMachines,
+        'cph':DeepCoxPH,
+        'dcm':DeepCoxMixtures,
+        'cmhe':DeepCoxMixturesHeterogenousEffects
+             }[args.model]
+    
+    param_grid = {'dsm': {'k' : [3, 4, 6],
+                          'distribution' : ['LogNormal', 'Weibull'],
+                          'learning_rate' : [ 1e-4, 1e-3],
+                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
+                          'discount': [ 1/2, 3/4, 1 ]},
+                  'cph': {'layers' : [ [50], [50, 50], [100], [100, 100] ]},
+                  'dcm': {'k' : [3, 4, 6], 
+                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
+                          'batch_size': [ 128 ]},
+                  'cmhe':{}
+                  }[args.model]
 
     outcomes, features = datasets.load_dataset("SUPPORT")
 
@@ -80,13 +95,10 @@ if __name__ == '__main__':
 
         model_dict = {}
         for param in params:
-            model = DeepSurvivalMachines(
-                k = param['k'],
-                distribution = param['distribution'],
-                layers = param['layers']
+            model_ = model(**param
                 )
 
-            model, loss = model.fit(
+            model_, loss = model_.fit(
                 x=x_train.values,
                 t=t_train.values,
                 e=e_train.values,
@@ -96,16 +108,20 @@ if __name__ == '__main__':
                     e_val.values
                     ),
                 iters=1000,
-                learning_rate = param['learning_rate']
+                **param
                 )
 
-            model_dict[model] = np.mean(loss)
+            model_dict[model_] = np.mean(loss)
 
-        model = min(model_dict, key=model_dict.get)
-
-        out_risk = model.predict_risk(x_test.values, times)
-        out_survival = model.predict_survival(x_test.values, times)
-
+        model_ = min(model_dict, key=model_dict.get)
+        
+        try:
+            out_risk = model_.predict_risk(x_test.values, times)
+            out_survival = 1 - out_risk
+        except:
+            out_survival = model_.predict_survival(x_test.values, times)
+            out_risk = 1 - out_survival
+            
         cis = []
         brs = []
 
