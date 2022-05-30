@@ -6,26 +6,14 @@ Created on Tue May 24 21:56:58 2022
 """
 
 import argparse
-
-from copy import deepcopy
-from collections import defaultdict
-
 import matplotlib.pyplot as plt
-import numpy as np
 
 import torch
-from torch import nn
-from torch import optim
-from torch.utils.data import DataLoader
 from torch.distributions.uniform import Uniform
-from torch.distributions.normal import Normal
-
-from itertools import chain
 
 from auton_survival import datasets, preprocessing
-from sksurv.metrics import (
-    concordance_index_ipcw, brier_score, cumulative_dynamic_auc
-    )
+
+from models import LambdaNN
 
 if __name__ == '__main__':
 
