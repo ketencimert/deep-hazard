@@ -8,7 +8,10 @@ from sklearn.utils import shuffle
 
 from tqdm import tqdm
 
-from auton_survival.models.dsm.utilities import get_optimizer, _reshape_tensor_with_nans
+from auton_lab.auton_survival.models.dsm.utilities import (
+    get_optimizer, 
+    _reshape_tensor_with_nans
+    )
 
 def randargmax(b,**kw):
   """ a random tie-breaking argmax"""

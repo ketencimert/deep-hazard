@@ -17,7 +17,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.uniform import Uniform
 
-from auton_survival import datasets, preprocessing
+from auton_lab.auton_survival import datasets, preprocessing
 from sksurv.metrics import (
     concordance_index_ipcw, brier_score, cumulative_dynamic_auc
     )
