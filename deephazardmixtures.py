@@ -202,7 +202,7 @@ if __name__ == '__main__':
     parser.add_argument('--d_hid', default=200, type=int)
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer', type=str)
-    parser.add_argument('--mixture_size', default=4, type=int)
+    parser.add_argument('--mixture_size', default=1, type=int)
     parser.add_argument('--save_metric', default='LL_valid', type=str)
     args = parser.parse_args()
 
