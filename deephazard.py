@@ -24,6 +24,7 @@ from sksurv.metrics import (
 
 from models import LambdaNN
 
+
 def evaluate_model(model, batcher, quantiles, train, valid):
 
     with torch.no_grad():
@@ -169,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument('--norm', default='layer')
     parser.add_argument('--save_metric', default='LL_valid', type=str)
     #dataset
-    parser.add_argument('--dataset', default='AKI/CKD', type=str)
+    parser.add_argument('--dataset', default='flchain', type=str)
     args = parser.parse_args()
 
     dtype = {

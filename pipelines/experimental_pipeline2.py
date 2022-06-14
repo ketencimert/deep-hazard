@@ -14,7 +14,7 @@ from sklearn.model_selection import ParameterGrid
 from sksurv.metrics import concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 from tqdm import tqdm
 
-from auton_lab.auton_survival import datasets, preprocessing
+from datasets import load_dataset
 from auton_lab.auton_survival.models.dsm import DeepSurvivalMachines
 from auton_lab.auton_survival.models.cph import DeepCoxPH
 from auton_lab.auton_survival.models.dcm import DeepCoxMixtures
@@ -29,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--model', default='dsm', type=str)
+    parser.add_argument('--dataset', default='flchain', type=str)
 
     args = parser.parse_args()
     
@@ -51,16 +52,7 @@ if __name__ == '__main__':
                   'cmhe':{}
                   }[args.model]
 
-    outcomes, features = datasets.load_dataset("SUPPORT")
-
-    cat_feats = ['sex', 'dzgroup', 'dzclass', 'income', 'race', 'ca']
-    num_feats = [key for key in features.keys() if key not in cat_feats]
-
-    features = preprocessing.Preprocessor().fit_transform(
-        cat_feats=cat_feats,
-        num_feats=num_feats,
-        data=features,
-        )
+    outcomes, features = load_dataset(args.dataset)
 
     horizons = [0.25, 0.5, 0.75]
     times = np.quantile(outcomes.time[outcomes.event==1], horizons).tolist()

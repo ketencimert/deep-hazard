@@ -4,9 +4,10 @@ Created on Tue Jun 14 09:47:07 2022
 
 @author: Mert
 """
-
+import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
+from sksurv.datasets import load_flchain
 from tqdm import tqdm
 
 from auton_lab.auton_survival import datasets, preprocessing
@@ -59,7 +60,22 @@ def load_dataset(
 
     elif dataset.lower() == 'pbc':
         features, t, e = datasets.load_dataset('PBC')
+        features = pd.DataFrame(features)
         outcomes = pd.DataFrame([t,e]).T
-        outcomes = outcomes.rename(columns={1:'time',2:'event'})
+        outcomes = outcomes.rename(columns={0:'time',1:'event'})
+    
+    elif dataset.lower() == 'flchain':
+        features, outcomes = load_flchain()
+        outcomes = pd.DataFrame(outcomes).astype(np.float32)
+        outcomes = outcomes.rename(columns={'futime':'time','death':'event'})
+        outcomes['time'] = outcomes['time'] + 1e-10
+        features = features.drop(columns=['sample.yr'])
+        cat_feats = ['chapter', 'flc.grp', 'mgus', 'sex']
+        num_feats = [key for key in features.keys() if key not in cat_feats]
+        features = preprocessing.Preprocessor().fit_transform(
+            cat_feats=cat_feats,
+            num_feats=num_feats,
+            data=features,
+            )
 
-    return features, outcomes
+    return outcomes, features
