@@ -67,12 +67,10 @@ if __name__ == '__main__':
 
     unique_times = np.unique(outcomes['time'].values)
 
-    cv_folds = 5
     n = len(features)
-
     tr_size = int(n*0.7)
 
-    folds = np.array(list(range(cv_folds))*n)[:n]
+    folds = np.array(list(range(args.cv_folds))*n)[:n]
     np.random.shuffle(folds)
 
     fold_results = defaultdict(lambda: defaultdict(list))

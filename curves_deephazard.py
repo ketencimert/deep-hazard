@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.distributions.uniform import Uniform
 
-from auton_survival import datasets, preprocessing
+from auton_lab.auton_survival import datasets, preprocessing
 
 from models import LambdaNN
 

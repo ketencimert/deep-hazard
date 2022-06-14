@@ -17,7 +17,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.uniform import Uniform
 
-from auton_lab.auton_survival import datasets, preprocessing
+from datasets import load_dataset
 from sksurv.metrics import (
     concordance_index_ipcw, brier_score, cumulative_dynamic_auc
     )
@@ -168,6 +168,8 @@ if __name__ == '__main__':
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer')
     parser.add_argument('--save_metric', default='LL_valid', type=str)
+    #dataset
+    parser.add_argument('--dataset', default='AKI/CKD', type=str)
     args = parser.parse_args()
 
     dtype = {
@@ -175,16 +177,7 @@ if __name__ == '__main__':
         'float32':torch.float,
         }[args.dtype]
 
-    outcomes, features = datasets.load_dataset("SUPPORT")
-
-    cat_feats = ['sex', 'dzgroup', 'dzclass', 'income', 'race', 'ca']
-    num_feats = [key for key in features.keys() if key not in cat_feats]
-
-    features = preprocessing.Preprocessor().fit_transform(
-        cat_feats=cat_feats,
-        num_feats=num_feats,
-        data=features,
-        )
+    outcomes, features = load_dataset(args.dataset)
 
     x, t, e = features, outcomes.time, outcomes.event
     n = len(x)
