@@ -13,6 +13,7 @@ import numpy as np
 from sklearn.model_selection import ParameterGrid
 from sksurv.metrics import concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 from tqdm import tqdm
+import pandas as pd
 
 from datasets import load_dataset
 from auton_lab.auton_survival.models.dsm import DeepSurvivalMachines
@@ -154,17 +155,26 @@ if __name__ == '__main__':
             print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
 
             fold_results[
-                'Fold: {}'.format(fold)
+                'Fold: {}'.format(2)
                 ][
                     'C-Index {} quantile'.format(horizon[1])
                     ].append(cis[horizon[0]])
             fold_results[
-                'Fold: {}'.format(fold)
+                'Fold: {}'.format(2)
                 ][
                     'Brier Score {} quantile'.format(horizon[1])
                     ].append(brs[0][horizon[0]])
             fold_results[
-                'Fold: {}'.format(fold)
+                'Fold: {}'.format(2)
                 ][
                     'ROC AUC {} quantile'.format(horizon[1])
                     ].append(roc_auc[horizon[0]][0])
+
+    fold_results = pd.DataFrame(fold_results)
+    for key in fold_results.keys():
+        fold_results[key] = [
+            _[0] for _ in fold_results[key]
+            ]
+    fold_results.to_csv(
+        './fold_results_{}_{}.csv'.format(args.dataset, args.model)
+        )

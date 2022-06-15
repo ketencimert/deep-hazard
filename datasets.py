@@ -41,7 +41,7 @@ def load_dataset(
 
         cat_feats = [x for x in features if x.split('.')[-1] == 'categorical']
         num_feats = [x for x in features if x not in cat_feats]
-        
+
         total = len(cat_feats)
         print("One hot encoding categorical features...")
         for cat_feat in tqdm(cat_feats, total=total):
@@ -52,7 +52,7 @@ def load_dataset(
                 data[col_name].fillna(data[col_name].median(), inplace=True)
             except:
                 pass
-            
+
         data = shuffle(data.dropna(axis=1))
         outcomes = data[['event', 'time']].reset_index(drop=True)
         features = data.drop(columns=drop).reset_index(drop=True)
@@ -63,7 +63,7 @@ def load_dataset(
         features = pd.DataFrame(features)
         outcomes = pd.DataFrame([t,e]).T
         outcomes = outcomes.rename(columns={0:'time',1:'event'})
-    
+
     elif dataset.lower() == 'flchain':
         features, outcomes = load_flchain()
         outcomes = pd.DataFrame(outcomes).astype(np.float32)
