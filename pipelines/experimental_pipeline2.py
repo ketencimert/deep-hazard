@@ -155,17 +155,17 @@ if __name__ == '__main__':
             print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
 
             fold_results[
-                'Fold: {}'.format(2)
+                'Fold: {}'.format(fold)
                 ][
                     'C-Index {} quantile'.format(horizon[1])
                     ].append(cis[horizon[0]])
             fold_results[
-                'Fold: {}'.format(2)
+                'Fold: {}'.format(fold)
                 ][
                     'Brier Score {} quantile'.format(horizon[1])
                     ].append(brs[0][horizon[0]])
             fold_results[
-                'Fold: {}'.format(2)
+                'Fold: {}'.format(fold)
                 ][
                     'ROC AUC {} quantile'.format(horizon[1])
                     ].append(roc_auc[horizon[0]][0])
