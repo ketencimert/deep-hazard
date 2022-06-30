@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model_name', default='cmhe', type=str)
+    parser.add_argument('--model_name', default='dcm', type=str)
     parser.add_argument('--dataset', default='flchain', type=str)
 
     args = parser.parse_args()
@@ -59,7 +59,7 @@ if __name__ == '__main__':
                           'layers' : [ [50], [50, 50], [100], [100, 100] ],
                           'batch_size': [ 128 ]},
                   'cmhe':{'k':[1,2,3,], 'g':[1,2,3], 'a':[]}
-                  }[args.model]
+                  }[args.model_name]
  
     for fold in tqdm(range(args.cv_folds)):
 
