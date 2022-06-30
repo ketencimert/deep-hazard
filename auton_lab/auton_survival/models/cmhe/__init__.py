@@ -182,7 +182,7 @@ class DeepCoxMixturesHeterogenousEffects:
 
   def fit(self, x, t, e, a, vsize=0.15, val_data=None,
           iters=1, learning_rate=1e-3, batch_size=100,
-          patience=2, optimizer="Adam", random_state=100):
+          patience=2, optimizer="Adam", random_state=100, **extras):
 
     r"""This method is used to train an instance of the DSM model.
 

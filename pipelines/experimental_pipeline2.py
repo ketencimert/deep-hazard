@@ -29,30 +29,11 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model', default='dsm', type=str)
+    parser.add_argument('--model_name', default='cmhe', type=str)
     parser.add_argument('--dataset', default='flchain', type=str)
 
     args = parser.parse_args()
     
-    model = {
-        'dsm':DeepSurvivalMachines,
-        'cph':DeepCoxPH,
-        'dcm':DeepCoxMixtures,
-        'cmhe':DeepCoxMixturesHeterogenousEffects
-             }[args.model]
-    
-    param_grid = {'dsm': {'k' : [3, 4, 6],
-                          'distribution' : ['LogNormal', 'Weibull'],
-                          'learning_rate' : [ 1e-4, 1e-3],
-                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
-                          'discount': [ 1/2, 3/4, 1 ]},
-                  'cph': {'layers' : [ [50], [50, 50], [100], [100, 100] ]},
-                  'dcm': {'k' : [3, 4, 6], 
-                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
-                          'batch_size': [ 128 ]},
-                  'cmhe':{}
-                  }[args.model]
-
     outcomes, features = load_dataset(args.dataset)
 
     horizons = [0.25, 0.5, 0.75]
@@ -68,7 +49,26 @@ if __name__ == '__main__':
 
     fold_results = defaultdict(lambda: defaultdict(list))
 
+    param_grid = {'dsm': {'k' : [3, 4, 6],
+                          'distribution' : ['LogNormal', 'Weibull'],
+                          'learning_rate' : [ 1e-4, 1e-3],
+                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
+                          'discount': [ 1/2, 3/4, 1 ]},
+                  'cph': {'layers' : [ [50], [50, 50], [100], [100, 100] ]},
+                  'dcm': {'k' : [3, 4, 6], 
+                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
+                          'batch_size': [ 128 ]},
+                  'cmhe':{'k':[1,2,3,], 'g':[1,2,3], 'a':[]}
+                  }[args.model]
+ 
     for fold in tqdm(range(args.cv_folds)):
+
+        model = {
+            'dsm':DeepSurvivalMachines,
+            'cph':DeepCoxPH,
+            'dcm':DeepCoxMixtures,
+            'cmhe':DeepCoxMixturesHeterogenousEffects
+                 }[args.model_name]
 
         x = features[folds!=fold]
         t = outcomes.time[folds!=fold]
