@@ -158,7 +158,7 @@ if __name__ == '__main__':
     parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
-    parser.add_argument('--epochs', default=2, type=int)
+    parser.add_argument('--epochs', default=1000, type=int)
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--importance_samples', default=256, type=int)
     # model, encoder-decoder args
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--norm', default='layer')
     parser.add_argument('--save_metric', default='LL_valid', type=str)
     # dataset
-    parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--dataset', default='flchain', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     args = parser.parse_args()
 
@@ -272,8 +272,8 @@ if __name__ == '__main__':
 
         for epoch in range(args.epochs):
 
-            print("Epoch: {}, LL_train: {}, LL_valid: {}".format(
-                epoch, tr_loglikelihood, val_loglikelihood)
+            print("Fold: {} Epoch: {}, LL_train: {}, LL_valid: {}".format(
+                fold, epoch, tr_loglikelihood, val_loglikelihood)
             )
 
             lambdann.train()
@@ -326,7 +326,7 @@ if __name__ == '__main__':
             if epoch_losses[args.save_metric][-1] == max(
                     epoch_losses[args.save_metric]
             ):
-                print("Saving Best Model...")
+                print("Caching Best Model...")
                 best_lambdann = deepcopy(lambdann)
 
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))

@@ -311,8 +311,8 @@ if __name__ == '__main__':
 
         for epoch in range(args.epochs):
 
-            print("Epoch: {}, LL_train: {}, LL_valid: {}".format(
-                epoch, tr_loglikelihood, val_loglikelihood)
+            print("Fold: {} Epoch: {}, LL_train: {}, LL_valid: {}".format(
+                fold, epoch, tr_loglikelihood, val_loglikelihood)
             )
 
             deephazardmixture.train()
@@ -388,7 +388,7 @@ if __name__ == '__main__':
             if epoch_losses[args.save_metric][-1] == max(
                     epoch_losses[args.save_metric]
             ):
-                print("Saving Best Model...")
+                print("Caching Best Model...")
                 best_lambdann = deepcopy(deephazardmixture)
 
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))
