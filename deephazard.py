@@ -131,13 +131,13 @@ class SurvivalData(torch.utils.data.Dataset):
 
             if 'cuda' in self.cuda:
                 self._cache[index][0] = self._cache[
-                    index][0].cuda(non_blocking=True)
+                    index][0].to(args.device)
 
                 self._cache[index][1] = self._cache[
-                    index][1].cuda(non_blocking=True)
+                    index][1].to(args.device)
 
                 self._cache[index][2] = self._cache[
-                    index][2].cuda(non_blocking=True)
+                    index][2].to(args.device)
 
         return self._cache[index]
 

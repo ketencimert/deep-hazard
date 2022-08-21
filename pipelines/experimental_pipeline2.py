@@ -9,6 +9,8 @@ import argparse
 from collections import defaultdict
 
 import numpy as np
+import random
+import torch
 
 from sklearn.model_selection import ParameterGrid
 from sksurv.metrics import concordance_index_ipcw, brier_score, cumulative_dynamic_auc
@@ -30,10 +32,13 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--model_name', default='dcm', type=str)
-    parser.add_argument('--dataset', default='flchain', type=str)
+    parser.add_argument('--dataset', default='support', type=str)
 
     args = parser.parse_args()
-    
+
+    seed = 12345
+    random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
+
     outcomes, features = load_dataset(args.dataset)
 
     horizons = [0.25, 0.5, 0.75]
