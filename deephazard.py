@@ -11,6 +11,7 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import random
 
 import torch
 from torch import optim
@@ -172,6 +173,9 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='flchain', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     args = parser.parse_args()
+
+    seed = 12345
+    random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
 
     dtype = {
         'float64': torch.double,

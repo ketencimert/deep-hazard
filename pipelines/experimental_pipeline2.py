@@ -176,5 +176,5 @@ if __name__ == '__main__':
             _[0] for _ in fold_results[key]
             ]
     fold_results.to_csv(
-        './fold_results_{}_{}.csv'.format(args.dataset, args.model)
+        './fold_results_{}_{}.csv'.format(args.dataset, args.model_name)
         )
