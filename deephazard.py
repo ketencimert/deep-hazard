@@ -333,6 +333,13 @@ if __name__ == '__main__':
                 print("Caching Best Model...")
                 best_lambdann = deepcopy(lambdann)
 
+            final = epoch_losses[args.save_metric][-1]
+            initial = epoch_losses[args.save_metric][-2]
+            delta = (final - initial) / initial
+            if delta <= args.epsilon:
+                print('Early Stopping...')
+                break
+
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))
         ax[0][0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
         ax_twin = ax[0][0].twinx()

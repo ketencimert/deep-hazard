@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model_name', default='dcm', type=str)
+    parser.add_argument('--model_name', default='dsm', type=str)
     parser.add_argument('--dataset', default='support', type=str)
 
     args = parser.parse_args()
