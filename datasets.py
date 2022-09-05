@@ -22,7 +22,8 @@ def one_hot_encode(dataframe, column):
 
 def load_dataset(
         dataset='SUPPORT',
-        path='C:/Users/Mert/Desktop/data.csv'
+        path='C:/Users/Mert/Desktop/data.csv',
+        scale_time=False
         ):
 
     if dataset.lower() == 'support':
@@ -78,7 +79,7 @@ def load_dataset(
             num_feats=num_feats,
             data=features,
             )
-    elif dataset.lower() == 'support_deepsurv':
+    elif dataset.lower() == 'pycox_support':
             f1 = h5py.File(
                 './auton_lab/auton_survival/datasets/support_train_test.h5',
                 'r+'
@@ -133,6 +134,53 @@ def load_dataset(
             num_feats=num_feats,
             data=features,
             )
-            
-            
+        
+    elif dataset.lower() == 'pycox_metabric':
+        f1 = h5py.File(
+            './auton_lab/auton_survival/datasets/metabric_IHC4_clinical_train_test.h5',
+            'r+'
+            )
+        e_tr, t_tr, x_tr = [
+            np.asarray(f1['train'][key]) for key in f1['train'].keys()
+            ]
+        e_te, t_te, x_te = [
+            np.asarray(f1['test'][key]) for key in f1['test'].keys()
+            ]
+        e = np.concatenate([e_tr, e_te])
+        t = np.concatenate([t_tr, t_te])
+        x = np.concatenate([x_tr, x_te])
+        outcomes_ = dict()
+        features_ = dict()
+        
+        feature_names = ['x{}'.format(i) for i in range(x.shape[1])]
+        
+        outcomes_['event'] = e
+        outcomes_['time'] = t
+        for i, key in enumerate(feature_names):
+            features_[key] = x[:,i]
+        outcomes = pd.DataFrame.from_dict(outcomes_)
+        features = pd.DataFrame.from_dict(features_)
+        
+        cat_feats = [
+            'x4', 
+            'x5', 
+            'x6', 
+            'x7', 
+            ]
+        
+        num_feats = [key for key in features.keys() if key not in cat_feats]
+        
+        features = preprocessing.Preprocessor().fit_transform(
+        cat_feats=cat_feats,
+        num_feats=num_feats,
+        data=features,
+        )
+
+    if scale_time:
+        outcomes.time = (
+            outcomes.time - outcomes.time.min()
+            ) / (
+                outcomes.time.max() - outcomes.time.min()
+                ) + 1e-15
+
     return outcomes, features
