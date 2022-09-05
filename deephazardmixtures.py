@@ -192,7 +192,7 @@ if __name__ == '__main__':
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
-    parser.add_argument('--epsilon', default=1e-4, type=float)
+    parser.add_argument('--epsilon', default=1e-6, type=float)
     parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
@@ -397,8 +397,11 @@ if __name__ == '__main__':
                 best_lambdann = deepcopy(deephazardmixture)
             
             final = epoch_losses[args.save_metric][-1]
-            initial = epoch_losses[args.save_metric][-2]
-            delta = (final - initial) / initial
+            try:
+                initial = epoch_losses[args.save_metric][-2]
+            except:
+                initial = np.inf
+            delta = np.abs((final - initial) / initial)
             if delta <= args.epsilon:
                 print('Early Stopping...')
                 break
