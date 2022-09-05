@@ -77,14 +77,14 @@ def evaluate_model(model, batcher, quantiles, train, valid):
             # For C-Index and Brier Score
 
             survival_quantile = []
-            for i in range(len(times)):
+            for i in range(len(quantiles)):
                 int_lambdann = [
                     torch.mean(
                         model(
                             c=j,
                             x=x,
                             t=t_samples_[:x.size(0), :, i]).view(x.size(0), -1),
-                        -1) * times[i]
+                        -1) * quantiles[i]
                     for j in range(args.mixture_size)
                 ]
 
@@ -119,24 +119,24 @@ def evaluate_model(model, batcher, quantiles, train, valid):
 
         cis = []
         brs = []
-        for i, _ in enumerate(times):
+        for i, _ in enumerate(quantiles):
             cis.append(
                 concordance_index_ipcw(
-                    train, valid, risk[:, i], times[i]
+                    train, valid, risk[:, i], quantiles[i]
                 )[0]
             )
 
         brs.append(
             brier_score(
-                train, valid, survival, times
+                train, valid, survival, quantiles
             )[1]
         )
 
         roc_auc = []
-        for i, _ in enumerate(times):
+        for i, _ in enumerate(quantiles):
             roc_auc.append(
                 cumulative_dynamic_auc(
-                    train, valid, risk[:, i], times[i]
+                    train, valid, risk[:, i], quantiles[i]
                 )[0]
             )
 
@@ -144,7 +144,7 @@ def evaluate_model(model, batcher, quantiles, train, valid):
 
 
 class SurvivalData(torch.utils.data.Dataset):
-    def __init__(self, x, t, e, cuda, dtype=torch.double):
+    def __init__(self, x, t, e, device, dtype=torch.double):
 
         self.ds = [
             [
@@ -154,7 +154,7 @@ class SurvivalData(torch.utils.data.Dataset):
             ] for x, t, e in zip(x, t, e)
         ]
 
-        self.cuda = cuda
+        self.device = device
         self._cache = dict()
 
         self.input_size_ = x.shape[1]
@@ -165,15 +165,15 @@ class SurvivalData(torch.utils.data.Dataset):
 
             self._cache[index] = list(self.ds[index])
 
-            if 'cuda' in self.cuda:
+            if 'cuda' in self.device:
                 self._cache[index][0] = self._cache[
-                    index][0].to(args.device)
+                    index][0].to(self.device)
 
                 self._cache[index][1] = self._cache[
-                    index][1].to(args.device)
+                    index][1].to(self.device)
 
                 self._cache[index][2] = self._cache[
-                    index][2].to(args.device)
+                    index][2].to(self.device)
 
         return self._cache[index]
 

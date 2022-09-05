@@ -79,7 +79,7 @@ def load_dataset(
             num_feats=num_feats,
             data=features,
             )
-    elif dataset.lower() == 'pycox_support':
+    elif dataset.lower() == 'support_pycox':
             f1 = h5py.File(
                 './auton_lab/auton_survival/datasets/support_train_test.h5',
                 'r+'
@@ -135,7 +135,7 @@ def load_dataset(
             data=features,
             )
         
-    elif dataset.lower() == 'pycox_metabric':
+    elif dataset.lower() == 'metabric_pycox':
         f1 = h5py.File(
             './auton_lab/auton_survival/datasets/metabric_IHC4_clinical_train_test.h5',
             'r+'
