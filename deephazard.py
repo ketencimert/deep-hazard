@@ -156,6 +156,7 @@ if __name__ == '__main__':
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
+    parser.add_argument('--epsilon', default=1e-4, type=float)
     parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
