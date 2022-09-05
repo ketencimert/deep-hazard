@@ -4,6 +4,7 @@ Created on Tue Jun 14 09:47:07 2022
 
 @author: Mert
 """
+import h5py
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
@@ -77,5 +78,61 @@ def load_dataset(
             num_feats=num_feats,
             data=features,
             )
-
+    elif dataset.lower() == 'support_deepsurv':
+            f1 = h5py.File(
+                './auton_lab/auton_survival/datasets/support_train_test.h5',
+                'r+'
+                )
+            e_tr, t_tr, x_tr = [
+                np.asarray(f1['train'][key]) for key in f1['train'].keys()
+                ]
+            e_te, t_te, x_te = [
+                np.asarray(f1['test'][key]) for key in f1['test'].keys()
+                ]
+            e = np.concatenate([e_tr, e_te])
+            t = np.concatenate([t_tr, t_te])
+            x = np.concatenate([x_tr, x_te])
+            outcomes_ = dict()
+            features_ = dict()
+            
+            feature_names = ['age',
+            'sex', 
+            'race', 
+            'number of comorbidities', 
+            'presence of diabetes', 
+            'presence of dementia', 
+            'presence of cancer',
+            'mean arterial blood pressure', 
+            'heart rate', 
+            'respiration rate',
+             'temperature', 
+             'white blood cell count', 
+             "serum’s sodium", 
+             "serum’s creatinine"
+             ]
+            
+            outcomes_['event'] = e
+            outcomes_['time'] = t
+            for i, key in enumerate(feature_names):
+                features_[key] = x[:,i]
+            outcomes = pd.DataFrame.from_dict(outcomes_)
+            features = pd.DataFrame.from_dict(features_)
+            
+            cat_feats = [
+                'sex', 
+                'race', 
+                'presence of diabetes', 
+                'presence of dementia', 
+                'presence of cancer'
+                ]
+            
+            num_feats = [key for key in features.keys() if key not in cat_feats]
+            
+            features = preprocessing.Preprocessor().fit_transform(
+            cat_feats=cat_feats,
+            num_feats=num_feats,
+            data=features,
+            )
+            
+            
     return outcomes, features
