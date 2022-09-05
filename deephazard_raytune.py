@@ -6,6 +6,7 @@ Created on Mon Sep  5 14:08:43 2022
 """
 
 import argparse
+import json
 import numpy as np
 import random
 from ray import tune, init
@@ -358,5 +359,9 @@ if __name__ == "__main__":
         metric=config['save_metric'],
         mode=config['mode']
         )
-
+    
+    with open(
+            './deephazarda_tuned_parameters_{}.json'.format(config['dataset'])
+            , 'w') as f:
+        json.dump(config, f)
     # print("Best config is:", results.get_best_result().config)
