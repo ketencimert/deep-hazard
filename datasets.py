@@ -176,6 +176,8 @@ def load_dataset(
         data=features,
         )
 
+    outcomes.time = outcomes.time + 1e-15
+
     if scale_time:
         outcomes.time = (
             outcomes.time - outcomes.time.min()
