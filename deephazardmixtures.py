@@ -126,6 +126,17 @@ def evaluate_model(model, batcher, quantiles, train, valid):
                 )[0]
             )
 
+        #Remove larger test times to confirm with
+        #https://scikit-survival.readthedocs.io/en/stable/user_guide/evaluating-survival-models.html
+        max_va = max([k[1] for k in valid])
+        max_tr = max([k[1] for k in train])
+        while max_va > max_tr:
+            idx = [k[1] for k in valid].index(max_va)
+            valid = np.delete(valid, idx, 0)
+            survival = np.delete(survival, idx, 0)
+            risk = np.delete(risk, idx, 0)
+            max_va = max([k[1] for k in valid])
+
         brs.append(
             brier_score(
                 train, valid, survival, quantiles

@@ -31,8 +31,8 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model_name', default='dsm', type=str)
-    parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--model_name', default='cph', type=str)
+    parser.add_argument('--dataset', default='metabric_pycox', type=str)
 
     args = parser.parse_args()
 
@@ -59,7 +59,7 @@ if __name__ == '__main__':
                           'learning_rate' : [ 1e-4, 1e-3],
                           'layers' : [ [50], [50, 50], [100], [100, 100] ],
                           'discount': [ 1/2, 3/4, 1 ]},
-                  'cph': {'layers' : [ [50], [50, 50], [100], [100, 100] ]},
+                  'cph': {'layers' : [ [50] ]},
                   'dcm': {'k' : [3, 4, 6], 
                           'layers' : [ [50], [50, 50], [100], [100, 100] ],
                           'batch_size': [ 128 ]},
@@ -140,7 +140,17 @@ if __name__ == '__main__':
                     times[i]
                     )[0]
                 )
-
+        
+        max_te = max([k[1] for k in et_test])
+        max_tr = max([k[1] for k in et_train])
+        
+        while max_te > max_tr:
+            idx = [k[1] for k in et_test].index(max_te)
+            et_test = np.delete(et_test, idx, 0)
+            out_survival = np.delete(out_survival, idx, 0)
+            out_risk = np.delete(out_risk, idx, 0)
+            max_te = max([k[1] for k in et_test])
+            
         brs.append(brier_score(et_train, et_test, out_survival, times)[1])
         roc_auc = []
         for i, _ in enumerate(times):
