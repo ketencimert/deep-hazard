@@ -323,7 +323,7 @@ if __name__ == "__main__":
     parser.add_argument('--norm', default='layer')
     parser.add_argument('--save_metric', default='LL_valid', type=str)
     # dataset
-    parser.add_argument('--dataset', default='flchain', type=str)
+    parser.add_argument('--dataset', default='support', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     args = parser.parse_args()
 
@@ -356,7 +356,7 @@ if __name__ == "__main__":
         raise_on_failed_trial = False)
 
     config = result.get_best_config(
-        metric=config['save_metric'],
+        metric='_metric/'+config['save_metric'],
         mode=config['mode']
         )
     
