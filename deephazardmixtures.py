@@ -23,7 +23,7 @@ from sksurv.metrics import (
     concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 )
 
-from models import LambdaNN, Prior, DeepHazardMixture
+from models import LambdaNN, DeepHazardMixture
 from datasets import load_dataset
 from tqdm import tqdm
 import pandas as pd
@@ -55,28 +55,21 @@ def evaluate_model(model, batcher, quantiles, train, valid):
 
             loglikelihood = [
                 (
-                        model.forward_lambda(
-                            c=j, 
-                            x=x, 
-                            t=t
-                            ).log().squeeze(-1) * e
+                        model(c=j, x=x, t=t).log().squeeze(-1) * e
                         - torch.mean(
-                    model.forward_lambda(
-                        c=j, 
-                        x=x, 
-                        t=t_samples
-                        ).view(x.size(0), -1),
+                    model(c=j, x=x, t=t_samples).view(x.size(0), -1),
                     -1) * t
                 )
                 for j in range(args.mixture_size)
             ]
 
             loglikelihood = torch.stack(loglikelihood, -1)
-            logproportions = model.forward_prior(x)
-            loglikelihood += logproportions
+
+            posterior = loglikelihood - loglikelihood.logsumexp(-1).view(-1, 1)
+            posterior = posterior.exp()
 
             loglikelihood = torch.sum(
-                loglikelihood.exp(), -1
+                loglikelihood.exp() * posterior, -1
             ).log()
             loglikelihood = loglikelihood.mean()
             loglikelihoods.append(loglikelihood.item())
@@ -87,7 +80,7 @@ def evaluate_model(model, batcher, quantiles, train, valid):
             for i in range(len(quantiles)):
                 int_lambdann = [
                     torch.mean(
-                        model.forward_lambda(
+                        model(
                             c=j,
                             x=x,
                             t=t_samples_[:x.size(0), :, i]).view(x.size(0), -1),
@@ -95,16 +88,26 @@ def evaluate_model(model, batcher, quantiles, train, valid):
                     for j in range(args.mixture_size)
                 ]
 
-                proportions = model.forward_prior(x)
-                proportions = proportions.exp()
+                loglikelihood = [
+                    (
+                            model(c=j, x=x, t=t).log().squeeze(-1) * e
+                            - torch.mean(
+                        model(c=j, x=x, t=t_samples).view(x.size(0), -1),
+                        -1) * t
+                    )
+                    for j in range(args.mixture_size)
+                ]
+
+                loglikelihood = torch.stack(loglikelihood, -1)
+                posterior = loglikelihood - loglikelihood.logsumexp(
+                    -1
+                ).view(-1, 1)
+                posterior = posterior.exp()
 
                 int_lambdann = torch.stack(int_lambdann, -1)
+                int_lambdann = torch.sum(posterior * int_lambdann, -1)
 
-                survival_quantile.append(
-                    torch.sum(
-                        torch.exp(-int_lambdann) * proportions
-                        ,-1)
-                    )
+                survival_quantile.append(torch.exp(-int_lambdann))
 
             survival_quantile = torch.stack(survival_quantile, -1)
             survival.append(survival_quantile)
@@ -200,7 +203,7 @@ if __name__ == '__main__':
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
-    parser.add_argument('--epsilon', default=1e-10, type=float)
+    parser.add_argument('--epsilon', default=1e-6, type=float)
     parser.add_argument('--dtype', default='float64', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
@@ -213,7 +216,7 @@ if __name__ == '__main__':
     parser.add_argument('--d_hid', default=200, type=int)
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer', type=str)
-    parser.add_argument('--mixture_size', default=2, type=int)
+    parser.add_argument('--mixture_size', default=3, type=int)
     parser.add_argument('--save_metric', default='LL_valid', type=str)
     # dataset
     parser.add_argument('--dataset', default='support', type=str)
@@ -236,7 +239,7 @@ if __name__ == '__main__':
 
     folds = np.array(list(range(args.cv_folds)) * n)[:n]
     np.random.shuffle(folds)
-    #is it ok to use entire dataset when defiing the quantiles?
+
     horizons = [0.25, 0.5, 0.75]
     times = np.quantile(t[e == 1], horizons).tolist()
 
@@ -301,17 +304,12 @@ if __name__ == '__main__':
         d_out = 1
         d_hid = d_in // 2 if args.d_hid is None else args.d_hid
 
-        lambdanns = [
-            LambdaNN(
-                d_in, d_out, d_hid, args.n_layers, p=args.dropout,
-                norm=args.norm, activation=args.activation
-                ) for _ in range(args.mixture_size)
-            ]
-        prior = Prior(
-            d_in, args.mixture_size, d_hid, args.n_layers, p=args.dropout,
+        lambdanns = [LambdaNN(
+            d_in, d_out, d_hid, args.n_layers, p=args.dropout,
             norm=args.norm, activation=args.activation
-            )
-        deephazardmixture = DeepHazardMixture(lambdanns, prior).to(args.device)
+        ).to(args.device) for _ in range(args.mixture_size)
+                     ]
+        deephazardmixture = DeepHazardMixture(lambdanns)
 
         optimizer = optim.Adam(deephazardmixture.parameters(), lr=args.lr,
                                weight_decay=args.wd
@@ -343,13 +341,9 @@ if __name__ == '__main__':
 
                 train_loglikelihood = [
                     (
-                            deephazardmixture.forward_lambda(
-                                c=i, 
-                                x=x, 
-                                t=t
-                                ).log().squeeze(-1) * e
+                            deephazardmixture(c=i, x=x, t=t).log().squeeze(-1) * e
                             - torch.mean(
-                        deephazardmixture.forward_lambda(
+                        deephazardmixture(
                             c=i,
                             x=x,
                             t=t_samples
@@ -358,25 +352,21 @@ if __name__ == '__main__':
                     )
                     for i in range(args.mixture_size)
                 ]
-                
-                train_logproportions = deephazardmixture.forward_prior(x)
-                
+
                 train_loglikelihood = torch.stack(train_loglikelihood, -1)
-                train_loglikelihood += train_logproportions
-                
+
                 posterior = train_loglikelihood - train_loglikelihood.logsumexp(
                     -1
                 ).view(-1, 1)
-                posterior = posterior - posterior.logsumexp(0)
                 posterior = posterior.exp()
                 posterior = posterior.detach()
-                
+
                 elbo = torch.sum(train_loglikelihood * posterior, -1)
                 elbo = elbo.mean()
 
                 train_loglikelihood = torch.sum(
-                    train_loglikelihood.exp(), -1
-                ).log() #\sum_z p(x,t|z)p(z|x) should have been \sum_z p(x,t|z)p(z)
+                    train_loglikelihood.exp() * posterior, -1
+                ).log()
 
                 train_loglikelihood = train_loglikelihood.mean()
                 tr_loglikelihoods.append(train_loglikelihood.item())
