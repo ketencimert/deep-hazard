@@ -93,13 +93,13 @@ def evaluate_model(model, batcher, quantiles, train, valid):
                             model(
                                 c=j, 
                                 x=x,
-                                t=times_tensor[:x.size(0),i]).log().squeeze(-1) * e
+                                t=times_tensor[:x.size(0),i]).log().squeeze(-1)
                             - torch.mean(
                         model(
                             c=j, 
                             x=x, 
                             t=t_samples_[:x.size(0), :, i]).view(x.size(0), -1),
-                        -1) * t
+                        -1) * times_tensor[:x.size(0),i]
                     )
                     for j in range(args.mixture_size)
                 ]
