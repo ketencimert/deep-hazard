@@ -13,12 +13,19 @@ from itertools import chain
 
 
 class DeepHazardMixture(nn.Module):
-    def __init__(self, lambdanns):
+    def __init__(self, lambdanns, prior=None):
         super().__init__()
         self.lambdanns = nn.ModuleList(lambdanns)
-
+        self.prior = prior
+        
     def forward(self, c, x, t):
         return self.lambdanns[c](x, t)
+
+    def forward_lambda(self, c, x, t):
+        return self.lambdanns[c](x, t)
+
+    def forward_prior(self, x):
+        return self.prior(x)
 
     def mixture_size(self):
         return len(self.lambdanns)
@@ -132,3 +139,57 @@ class LambdaNN(nn.Module):
 
         return nn.Softplus()(z)
 
+
+class Prior(nn.Module):
+    def __init__(self, d_in, mixture_size, d_hid, n_layers, activation="relu",
+                 p=0.3, norm=False, dtype=torch.double):
+        super().__init__()
+
+        act_fn = {
+            'relu':nn.ReLU(),
+            'elu':nn.ELU(),
+            'selu':nn.SELU(),
+            'silu':nn.SiLU()
+            }
+
+        act_fn = act_fn[activation]
+
+        norm_fn = {
+            'layer':nn.LayerNorm(d_hid, dtype=dtype),
+            'batch':nn.BatchNorm1d(d_hid, dtype=dtype)
+            }
+
+        if norm in norm_fn.keys():
+            norm_fn = norm_fn[norm]
+        else:
+            norm = False
+
+        self.noise = nn.Dropout(p)
+
+        self.feature_net = list(
+                chain(
+                    *[
+                        [
+                            nn.Linear(
+                                d_in if ii == 0 else d_hid,
+                                mixture_size if ii + 1 == n_layers else d_hid,
+                                dtype=dtype
+                            ),
+                            nn.Identity() if ii + 1 == n_layers else act_fn,
+                            nn.Identity() if not norm else norm_fn,
+                            nn.Dropout(p)
+                        ]
+                        for ii in range(n_layers)
+                    ]
+                )
+            )
+        self.feature_net.pop(-1)
+        self.feature_net.pop(-1)
+        self.feature_net = nn.Sequential(*self.feature_net)
+
+    def forward(self, x):
+
+        x = self.noise(x)
+        x = self.feature_net(x)
+
+        return nn.LogSoftmax(-1)(x)

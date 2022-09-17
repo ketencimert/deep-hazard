@@ -102,8 +102,8 @@ def evaluate_model(model, batcher, quantiles, train, valid):
 
                 survival_quantile.append(
                     torch.sum(
-                        torch.exp(-int_lambdann) * proportions
-                        ,-1)
+                        torch.exp(-int_lambdann) * proportions, -1
+                        )
                     )
 
             survival_quantile = torch.stack(survival_quantile, -1)
@@ -210,7 +210,7 @@ if __name__ == '__main__':
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int)
     parser.add_argument('--dropout', default=0.5, type=float)
-    parser.add_argument('--d_hid', default=200, type=int)
+    parser.add_argument('--d_hid', default=100, type=int)
     parser.add_argument('--activation', default='relu', type=str)
     parser.add_argument('--norm', default='layer', type=str)
     parser.add_argument('--mixture_size', default=2, type=int)
@@ -367,7 +367,7 @@ if __name__ == '__main__':
                 posterior = train_loglikelihood - train_loglikelihood.logsumexp(
                     -1
                 ).view(-1, 1)
-                posterior = posterior - posterior.logsumexp(0)
+                # posterior = posterior - posterior.logsumexp(0)
                 posterior = posterior.exp()
                 posterior = posterior.detach()
                 
