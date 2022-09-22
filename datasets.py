@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
 from sksurv.datasets import load_flchain
+import torch
 from tqdm import tqdm
 
 from auton_lab.auton_survival import datasets, preprocessing
@@ -186,3 +187,47 @@ def load_dataset(
                 ) + 1e-15
 
     return outcomes, features
+
+
+class SurvivalData(torch.utils.data.Dataset):
+    def __init__(self, x, t, e, device, dtype=torch.double):
+
+        self.ds = [
+            [
+                torch.tensor(x, dtype=dtype),
+                torch.tensor(t, dtype=dtype),
+                torch.tensor(e, dtype=dtype)
+            ] for x, t, e in zip(x, t, e)
+        ]
+
+        self.device = device
+        self._cache = dict()
+
+        self.input_size_ = x.shape[1]
+
+    def __getitem__(self, index: int) -> torch.Tensor:
+
+        if index not in self._cache:
+
+            self._cache[index] = list(self.ds[index])
+
+            if 'cuda' in self.device:
+                self._cache[index][0] = self._cache[
+                    index][0].to(self.device)
+
+                self._cache[index][1] = self._cache[
+                    index][1].to(self.device)
+
+                self._cache[index][2] = self._cache[
+                    index][2].to(self.device)
+
+        return self._cache[index]
+
+    def __len__(self) -> int:
+
+        return len(self.ds)
+
+    def input_size(self):
+
+        return self.input_size_
+

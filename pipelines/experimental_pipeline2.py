@@ -4,6 +4,7 @@ Created on Sat May 28 19:14:40 2022
 
 @author: Mert
 """
+import os
 
 import argparse
 from collections import defaultdict
@@ -54,17 +55,28 @@ if __name__ == '__main__':
 
     fold_results = defaultdict(lambda: defaultdict(list))
 
-    param_grid = {'dsm': {'k' : [3, 4, 6],
-                          'distribution' : ['LogNormal', 'Weibull'],
-                          'learning_rate' : [ 1e-4, 1e-3],
-                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
-                          'discount': [ 1/2, 3/4, 1 ]},
-                  'cph': {'layers' : [ [50] ]},
-                  'dcm': {'k' : [3, 4, 6], 
-                          'layers' : [ [50], [50, 50], [100], [100, 100] ],
-                          'batch_size': [ 128 ]},
-                  'cmhe':{'k':[1,2,3,], 'g':[1,2,3], 'a':[]}
-                  }[args.model_name]
+    param_grid = {
+        'dsm': {
+            'k' : [3, 4, 6],
+            'distribution' : ['LogNormal', 'Weibull'],
+            'learning_rate' : [ 1e-4, 1e-3],
+            'layers' : [ [50], [50, 50], [100], [100, 100] ],
+            'discount': [ 1/2, 3/4, 1 ]
+            },
+        'cph': {
+            'layers' : [ [50] ]
+            },
+        'dcm': {
+            'k' : [3, 4, 6], 
+            'layers' : [ [50], [50, 50], [100], [100, 100] ],
+            'batch_size': [ 128 ]
+            },
+        'cmhe':{
+            'k':[1,2,3,], 
+            'g':[1,2,3], 
+            'a':[],
+            },
+        }[args.model_name]
  
     for fold in tqdm(range(args.cv_folds)):
 
@@ -190,6 +202,11 @@ if __name__ == '__main__':
         fold_results[key] = [
             _[0] for _ in fold_results[key]
             ]
+
+    os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results_{}_{}.csv'.format(args.dataset, args.model_name)
+        './fold_results/fold_results_{}_{}.csv'.format(
+            args.dataset, 
+            args.model_name
+            )
         )

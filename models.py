@@ -31,6 +31,73 @@ class DeepHazardMixture(nn.Module):
         return len(self.lambdanns)
 
 
+class ExplainableLambdaNN(nn.Module):
+    def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
+                 p=0.3, norm=False, dtype=torch.double):
+        super().__init__()
+        
+        act_fn = {
+            'relu':nn.ReLU(),
+            'elu':nn.ELU(),
+            'selu':nn.SELU(),
+            'silu':nn.SiLU()
+            }
+
+        act_fn = act_fn[activation]
+        
+        self.noise = nn.Dropout(p)
+        self.shared_net = []
+        for _ in range(d_in):
+
+            shared_net = list(
+                    chain(
+                        *[
+                            [
+                                nn.Linear(
+                                    2 if ii == 0 else d_hid,
+                                    1 if ii + 1 == n_layers else d_hid,
+                                    dtype=dtype
+                                ),
+                                nn.Identity() if ii + 1 == n_layers else act_fn,
+                            ]
+                            for ii in range(n_layers)
+                        ]
+                    )
+                )
+            self.shared_net.append(nn.Sequential(*shared_net))
+
+        self.shared_net = nn.ModuleList(self.shared_net)
+
+    def forward(self, x, t):     
+        
+        t = t.reshape(-1,1)
+        
+        if x.size(0) != t.size(0):
+
+            x = x.repeat_interleave(t.size(0) // x.size(0), 0)
+        
+        if self.training:
+
+            t = Normal(loc=t, scale=1).sample()
+            
+        z = nn.Softplus()(
+            torch.cat(
+                [
+                    self.shared_net[i](
+                        torch.cat(
+                            [
+                                x[:,i].view(-1,1), t
+                                ], 
+                            -1)
+                        ).unsqueeze(1) for i in range(x.size(1))
+                    ], 
+                1)
+            )
+
+        z = torch.sum(z.squeeze(-1), -1)
+        
+        return z
+        
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
                  p=0.3, norm=False, dtype=torch.double):

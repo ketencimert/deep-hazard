@@ -4,63 +4,26 @@ Created on Mon Sep  5 14:08:43 2022
 
 @author: Mert
 """
-
+import os
 import argparse
 import json
 import numpy as np
 import random
+
 from ray import tune, init
 from ray.tune import CLIReporter
-from ray.tune.schedulers import MedianStoppingRule
+from ray.tune.schedulers import ASHAScheduler
+from ray.tune.search.hyperopt import HyperOptSearch
+
 import torch
 from torch.distributions.uniform import Uniform
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from datasets import load_dataset
-from deephazard import *
+from datasets import SurvivalData, load_dataset
+from models import LambdaNN
+from utils import evaluate_model
 
-class SurvivalData(torch.utils.data.Dataset):
-    def __init__(self, x, t, e, device, dtype=torch.double):
-
-        self.ds = [
-            [
-                torch.tensor(x, dtype=dtype),
-                torch.tensor(t, dtype=dtype),
-                torch.tensor(e, dtype=dtype)
-            ] for x, t, e in zip(x, t, e)
-        ]
-
-        self.device = device
-        self._cache = dict()
-
-        self.input_size_ = x.shape[1]
-
-    def __getitem__(self, index: int) -> torch.Tensor:
-
-        if index not in self._cache:
-
-            self._cache[index] = list(self.ds[index])
-
-            if 'cuda' in self.device:
-                self._cache[index][0] = self._cache[
-                    index][0].to(self.device)
-
-                self._cache[index][1] = self._cache[
-                    index][1].to(self.device)
-
-                self._cache[index][2] = self._cache[
-                    index][2].to(self.device)
-
-        return self._cache[index]
-
-    def __len__(self) -> int:
-
-        return len(self.ds)
-
-    def input_size(self):
-
-        return self.input_size_
 
 def train(lambdann, optimizer, train_dataloader, importance_samples, device):
 
@@ -90,88 +53,6 @@ def train(lambdann, optimizer, train_dataloader, importance_samples, device):
 
     return epoch_losses
 
-
-def test(
-        model, batcher, quantiles, train, valid, 
-        importance_samples, train_batch_size, dtype,
-        device
-        ):
-    with torch.no_grad():
-
-        times_tensor = torch.tensor(quantiles, dtype=dtype).to(device)
-        times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
-            train_batch_size, -1
-        ).T
-
-        importance_sampler = Uniform(0, times_tensor)
-        t_samples_ = torch.transpose(
-            importance_sampler.sample(
-                (importance_samples,)
-            ), 0, 1
-        )
-
-        loglikelihoods = []
-        survival = []
-        ts = []
-        for (x, t, e) in batcher:
-            importance_sampler = Uniform(0, t)
-            t_samples = importance_sampler.sample(
-                (importance_samples,)
-            ).T
-
-            loglikelihood = (
-                    model(x=x, t=t).log().squeeze(-1) * e
-                    - torch.mean(
-                model(x=x, t=t_samples).view(x.size(0), -1),
-                -1) * t
-            ).mean()
-
-            loglikelihoods.append(loglikelihood.item())
-
-            # For C-Index and Brier Score
-
-            survival_quantile = []
-            for i in range(len(quantiles)):
-                int_lambdann = torch.mean(
-                    model(
-                        x=x,
-                        t=t_samples_[:x.size(0), :, i]).view(x.size(0), -1),
-                    -1) * quantiles[i]
-
-                survival_quantile.append(torch.exp(-int_lambdann))
-
-            survival_quantile = torch.stack(survival_quantile, -1)
-            survival.append(survival_quantile)
-            ts.append(t)
-
-        ts = torch.cat(ts).cpu().numpy()
-        survival = torch.cat(survival).cpu().numpy()
-        risk = 1 - survival
-
-        cis = []
-        brs = []
-        for i, _ in enumerate(quantiles):
-            cis.append(
-                concordance_index_ipcw(
-                    train, valid, risk[:, i], quantiles[i]
-                )[0]
-            )
-
-        brs.append(
-            brier_score(
-                train, valid, survival, quantiles
-            )[1]
-        )
-
-        roc_auc = []
-        for i, _ in enumerate(quantiles):
-            roc_auc.append(
-                cumulative_dynamic_auc(
-                    train, valid, risk[:, i], quantiles[i]
-                )[0]
-            )
-
-        return np.mean(loglikelihoods), cis, brs, roc_auc
 
 def train_deephazard(config):
 
@@ -234,10 +115,10 @@ def train_deephazard(config):
     )
 
     train_dataloader = DataLoader(
-        train_data, batch_size=config['batch_size'], shuffle=True
+        train_data, batch_size=config['bs'], shuffle=True
     )
     valid_dataloader = DataLoader(
-        valid_data, batch_size=config['batch_size'], shuffle=False
+        valid_data, batch_size=config['bs'], shuffle=False
     )
 
     #input size is fixed to x_tr size
@@ -248,8 +129,8 @@ def train_deephazard(config):
 
     model = LambdaNN(
         d_in, d_out, d_hid,
-        n_layers=config['n_layers'], p=config['dropout'],
-        norm=config['norm'], activation=config['activation']
+        n_layers=config['n_layers'], p=config['p'],
+        norm=config['norm'], activation=config['act']
         ).to(device)
 
     optimizer = optim.Adam(
@@ -263,12 +144,12 @@ def train_deephazard(config):
             model.train(),
             optimizer,
             train_dataloader,
-            config['importance_samples'],
+            config['imps'],
             device
             )
-        valid_loglikelihood, cis, brs, roc_auc = test(
+        valid_loglikelihood, cis, brs, roc_auc = evaluate_model(
             model.eval(), valid_dataloader, times,
-            et_tr, et_val, config['importance_samples'],
+            et_tr, et_val, config['imps'],
             train_batch_size, dtype, 
             device
             )
@@ -289,6 +170,9 @@ def train_deephazard(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    # dataset
+    parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--cv_folds', default=5, type=int)
     # device args
     parser.add_argument('--seed', default=12345, type=int)
     parser.add_argument('--device', default='cuda', type=str)
@@ -301,30 +185,27 @@ if __name__ == "__main__":
                         default=tune.choice([1e-6, 5e-6, 1e-5, 5e-5, 1e-4])
                         )
     parser.add_argument('--epochs', default=1000, type=int)
-    parser.add_argument('--batch_size',
+    parser.add_argument('--bs',
                         default=tune.choice([64, 128, 256, 512])
                         )
-    parser.add_argument('--importance_samples',
+    parser.add_argument('--imps',
                         default=tune.choice([int(64), int(128), int(256), int(512)])
                         )
     # model, encoder-decoder args
     parser.add_argument('--n_layers',
                         default=tune.choice([1, 2, 3, 4])
                         )
-    parser.add_argument('--dropout',
+    parser.add_argument('--p',
                         default=tune.choice([1e-1, 2e-1, 3e-1, 4e-1, 5e-1])
                         )
     parser.add_argument('--d_hid', 
                         default=tune.choice([50, 100, 200, 300, 400])
                         )
-    parser.add_argument('--activation', 
+    parser.add_argument('--act', 
                         default=tune.choice(['relu', 'elu', 'selu', 'silu'])
                         )
     parser.add_argument('--norm', default='layer')
     parser.add_argument('--save_metric', default='LL_valid', type=str)
-    # dataset
-    parser.add_argument('--dataset', default='support', type=str)
-    parser.add_argument('--cv_folds', default=5, type=int)
     args = parser.parse_args()
 
     args.mode = 'max'
@@ -333,12 +214,17 @@ if __name__ == "__main__":
 
     config = vars(args)
 
-    mdn_scheduler = MedianStoppingRule(
-        time_attr = 'time_total_s',
+    scheduler = ASHAScheduler(
+            metric='_metric/'+config['save_metric'],  # this is validation loss for me
+            mode=config['mode'],
+            max_t=config['epochs'], # i set this to be relatively high
+            grace_period=10,  # default here is `1`; increasing may help tuning runs
+            reduction_factor=2, # default is `4`; should probably play with this as well
+        )
+    searcher = HyperOptSearch(
         metric='_metric/'+config['save_metric'],
         mode=config['mode']
         )
-
     reporter = CLIReporter(
         metric_columns=[config['save_metric'], "training_iteration"]
         )
@@ -352,16 +238,21 @@ if __name__ == "__main__":
         config=config,
         num_samples=100,
         progress_reporter=reporter,
-        scheduler=mdn_scheduler,
-        raise_on_failed_trial = False)
+        scheduler=scheduler,
+        search_alg=searcher,
+        raise_on_failed_trial=False)
 
     config = result.get_best_config(
         metric='_metric/'+config['save_metric'],
         mode=config['mode']
         )
-    
+
+    os.makedirs('./tune_results', exist_ok=True)
     with open(
-            './deephazarda_tuned_parameters_{}.json'.format(config['dataset'])
-            , 'w') as f:
+            './tune_results/deephazarda_tuned_parameters_{}.json'.format(
+                config['dataset']
+                )
+        , 'w') as f:
         json.dump(config, f)
-    # print("Best config is:", results.get_best_result().config)
+
+    

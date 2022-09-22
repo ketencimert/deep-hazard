@@ -4,6 +4,7 @@ Created on Thu May 19 23:12:27 2022
 
 @author: Mert
 """
+import os
 import argparse
 
 from copy import deepcopy
@@ -11,184 +12,63 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import random
 
 import torch
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.uniform import Uniform
-
-from datasets import load_dataset
-from sksurv.metrics import (
-    concordance_index_ipcw, brier_score, cumulative_dynamic_auc
-)
-
-from models import LambdaNN
-import pandas as pd
 from tqdm import tqdm
 
+from datasets import SurvivalData, load_dataset
+from models import LambdaNN
+from utils import evaluate_model
 
-def evaluate_model(model, batcher, quantiles, train, valid):
-
-    with torch.no_grad():
-
-        times_tensor = torch.tensor(quantiles, dtype=dtype).to(args.device)
-        times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
-            train_dataloader.batch_size, -1
-        ).T
-
-        importance_sampler = Uniform(0, times_tensor)
-        t_samples_ = torch.transpose(
-            importance_sampler.sample(
-                (args.importance_samples,)
-            ), 0, 1
-        )
-
-        loglikelihoods = []
-        survival = []
-        ts = []
-        for (x, t, e) in batcher:
-            importance_sampler = Uniform(0, t)
-            t_samples = importance_sampler.sample(
-                (args.importance_samples,)
-            ).T
-
-            loglikelihood = (
-                    model(x=x, t=t).log().squeeze(-1) * e
-                    - torch.mean(
-                model(x=x, t=t_samples).view(x.size(0), -1),
-                -1) * t
-            ).mean()
-
-            loglikelihoods.append(loglikelihood.item())
-
-            # For C-Index and Brier Score
-
-            survival_quantile = []
-            for i in range(len(quantiles)):
-                int_lambdann = torch.mean(
-                    model(
-                        x=x,
-                        t=t_samples_[:x.size(0), :, i]).view(x.size(0), -1),
-                    -1) * quantiles[i]
-
-                survival_quantile.append(torch.exp(-int_lambdann))
-
-            survival_quantile = torch.stack(survival_quantile, -1)
-            survival.append(survival_quantile)
-            ts.append(t)
-
-        ts = torch.cat(ts).cpu().numpy()
-        survival = torch.cat(survival).cpu().numpy()
-        risk = 1 - survival
-
-        cis = []
-        brs = []
-        for i, _ in enumerate(quantiles):
-            cis.append(
-                concordance_index_ipcw(
-                    train, valid, risk[:, i], quantiles[i]
-                )[0]
-            )
-        
-        #Remove larger test times to confirm with
-        #https://scikit-survival.readthedocs.io/en/stable/user_guide/evaluating-survival-models.html
-        max_va = max([k[1] for k in valid])
-        max_tr = max([k[1] for k in train])
-        while max_va > max_tr:
-            idx = [k[1] for k in valid].index(max_va)
-            valid = np.delete(valid, idx, 0)
-            survival = np.delete(survival, idx, 0)
-            risk = np.delete(risk, idx, 0)
-            max_va = max([k[1] for k in valid])
-
-        brs.append(
-            brier_score(
-                train, valid, survival, quantiles
-            )[1]
-        )
-
-        roc_auc = []
-        for i, _ in enumerate(quantiles):
-            roc_auc.append(
-                cumulative_dynamic_auc(
-                    train, valid, risk[:, i], quantiles[i]
-                )[0]
-            )
-
-        return np.mean(loglikelihoods), cis, brs, roc_auc
-
-
-class SurvivalData(torch.utils.data.Dataset):
-    def __init__(self, x, t, e, device, dtype=torch.double):
-
-        self.ds = [
-            [
-                torch.tensor(x, dtype=dtype),
-                torch.tensor(t, dtype=dtype),
-                torch.tensor(e, dtype=dtype)
-            ] for x, t, e in zip(x, t, e)
-        ]
-
-        self.device = device
-        self._cache = dict()
-
-        self.input_size_ = x.shape[1]
-
-    def __getitem__(self, index: int) -> torch.Tensor:
-
-        if index not in self._cache:
-
-            self._cache[index] = list(self.ds[index])
-
-            if 'cuda' in self.device:
-                self._cache[index][0] = self._cache[
-                    index][0].to(self.device)
-
-                self._cache[index][1] = self._cache[
-                    index][1].to(self.device)
-
-                self._cache[index][2] = self._cache[
-                    index][2].to(self.device)
-
-        return self._cache[index]
-
-    def __len__(self) -> int:
-
-        return len(self.ds)
-
-    def input_size(self):
-
-        return self.input_size_
-
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning) 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    # dataset
+    parser.add_argument('--dataset', default='support', type=str, 
+                        help='dataset')
+    parser.add_argument('--cv_folds', default=5, type=int, help='cv_folds')
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
-    parser.add_argument('--epsilon', default=1e-6, type=float)
-    parser.add_argument('--dtype', default='float64', type=str)
-    parser.add_argument('--lr', default=1e-3, type=float)
-    parser.add_argument('--wd', default=1e-5, type=float)
-    parser.add_argument('--epochs', default=1000, type=int)
-    parser.add_argument('--batch_size', default=256, type=int)
-    parser.add_argument('--importance_samples', default=256, type=int)
+    parser.add_argument('--eps', default=1e-7, type=float, help='epsilon')
+    parser.add_argument('--patience', default=10, type=float, help='patience')
+    parser.add_argument('--dtype', default='float64', type=str, help='dtype')
+    parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
+    parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
+    parser.add_argument('--epochs', default=2, type=int, help='epochs')
+    parser.add_argument('--bs', default=256, type=int, help='batch_size')
+    parser.add_argument('--imps', default=256, type=int, 
+                        help='importance_samples')
     # model, encoder-decoder args
-    parser.add_argument('--n_layers', default=2, type=int)
-    parser.add_argument('--dropout', default=0.5, type=float)
-    parser.add_argument('--d_hid', default=200, type=int)
-    parser.add_argument('--activation', default='relu', type=str)
-    parser.add_argument('--norm', default='layer')
-    parser.add_argument('--save_metric', default='LL_valid', type=str)
-    # dataset
-    parser.add_argument('--dataset', default='flchain', type=str)
-    parser.add_argument('--cv_folds', default=5, type=int)
+    parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
+    parser.add_argument('--p', default=0.5, type=float, help='dropout')
+    parser.add_argument('--d_hid', default=200, type=int, help='d_hid')
+    parser.add_argument('--act', default='relu', type=str, help='activation')
+    parser.add_argument('--norm', default='layer', help='normalization')
+    parser.add_argument('--save_metric', default='LL_valid', type=str, 
+                        help='save_metric')
     args = parser.parse_args()
 
     seed = 12345
     random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
+    
+    flags = ', '.join(
+        [
+            str(y) + ' ' + str(x) for (y,x) in vars(args).items() if y not in [
+                'device',
+                'dataset',
+                'cv_folds'
+                ]
+            ]
+        )
 
     dtype = {
         'float64': torch.double,
@@ -211,6 +91,9 @@ if __name__ == '__main__':
 
     for fold in tqdm(range(args.cv_folds)):
 
+        patience = 0
+        stop_reason = 'END OF EPOCHS'
+        
         x = features[folds != fold]
         t = outcomes.time[folds != fold]
         e = outcomes.event[folds != fold]
@@ -255,13 +138,13 @@ if __name__ == '__main__':
         )
 
         train_dataloader = DataLoader(
-            train_data, batch_size=args.batch_size, shuffle=True
+            train_data, batch_size=args.bs, shuffle=True
         )
         valid_dataloader = DataLoader(
-            valid_data, batch_size=args.batch_size, shuffle=False
+            valid_data, batch_size=args.bs, shuffle=False
         )
         test_dataloader = DataLoader(
-            test_data, batch_size=args.batch_size, shuffle=False
+            test_data, batch_size=args.bs, shuffle=False
         )
 
         d_in = x_tr.shape[1]
@@ -269,15 +152,15 @@ if __name__ == '__main__':
         d_hid = d_in // 2 if args.d_hid is None else args.d_hid
 
         lambdann = LambdaNN(
-            d_in, d_out, d_hid, args.n_layers, p=args.dropout,
-            norm=args.norm, activation=args.activation
+            d_in, d_out, d_hid, args.n_layers, p=args.p,
+            norm=args.norm, activation=args.act
         ).to(args.device)
 
         optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
                                weight_decay=args.wd
                                )
 
-        epoch_losses = defaultdict(list)
+        epoch_results = defaultdict(list)
 
         epoch_tr_loglikelihoods = []
         epoch_val_loglikelihoods = []
@@ -289,17 +172,22 @@ if __name__ == '__main__':
 
         for epoch in range(args.epochs):
 
-            print("Fold: {} Epoch: {}, LL_train: {}, LL_valid: {}".format(
-                fold, epoch, tr_loglikelihood, val_loglikelihood)
-            )
-
+            print(
+                "\nFold: {} Epoch: {}, LL_train: {}, LL_valid: {}".format(
+                    fold, 
+                    epoch, 
+                    round(tr_loglikelihood, 6), 
+                    round(val_loglikelihood, 6),
+                    )    
+                )
+            
             lambdann.train()
             tr_loglikelihoods = []
             for (x, t, e) in train_dataloader:
                 optimizer.zero_grad()
 
                 importance_sampler = Uniform(0, t)
-                t_samples = importance_sampler.sample((args.importance_samples,)).T
+                t_samples = importance_sampler.sample((args.imps,)).T
 
                 train_loglikelihood = (
                         lambdann(x=x, t=t).log().squeeze(-1) * e
@@ -319,54 +207,62 @@ if __name__ == '__main__':
             print("\nValidating Model...")
             # validate the model
             val_loglikelihood, cis, brs, roc_auc = evaluate_model(
-                lambdann.eval(), valid_dataloader, times, et_tr, et_val
+                lambdann.eval(), valid_dataloader, times, et_tr, et_val,
+                args.bs, args.imps, dtype, args.device
             )
 
-            epoch_losses['LL_train'].append(tr_loglikelihood)
-            epoch_losses['LL_valid'].append(val_loglikelihood)
+            epoch_results['LL_train'].append(tr_loglikelihood)
+            epoch_results['LL_valid'].append(val_loglikelihood)
 
             for horizon in enumerate(horizons):
                 print(f"For {horizon[1]} quantile,")
-                print("TD Concordance Index:", cis[horizon[0]])
-                print("Brier Score:", brs[0][horizon[0]])
-                print("ROC AUC ", roc_auc[horizon[0]][0], "\n")
-                epoch_losses[
+                print("TD Concordance Index:", round(cis[horizon[0]], 5))
+                print("Brier Score:", round(brs[0][horizon[0]], 6))
+                print("ROC AUC:", round(roc_auc[horizon[0]][0], 6), "\n")
+                epoch_results[
                     'C-Index {} quantile'.format(horizon[1])
                 ].append(cis[horizon[0]])
-                epoch_losses[
+                epoch_results[
                     'Brier Score {} quantile'.format(horizon[1])
                 ].append(brs[0][horizon[0]])
-                epoch_losses[
+                epoch_results[
                     'ROC AUC {} quantile'.format(horizon[1])
                 ].append(roc_auc[horizon[0]][0])
-
-            if epoch_losses[args.save_metric][-1] == max(
-                    epoch_losses[args.save_metric]
+            
+            print('Patience: {}'.format(patience))
+            
+            if epoch_results[args.save_metric][-1] == max(
+                    epoch_results[args.save_metric]
             ):
                 print("Caching Best Model...")
                 best_lambdann = deepcopy(lambdann)
 
-            final = epoch_losses[args.save_metric][-1]
+            final = epoch_results[args.save_metric][-1]
             try:
-                initial = epoch_losses[args.save_metric][-2]
+                initial = epoch_results[args.save_metric][-2]
             except:
                 initial = -np.inf
             delta = np.abs((final - initial) / initial)
-            if delta <= args.epsilon:
+            if delta <= args.eps:
+                patience += 1
+            else:
+                patience = 0
+            if patience == args.patience:
                 print('Early Stopping...')
+                stop_reason = 'EARLY STOP'
                 break
 
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))
-        ax[0][0].plot(epoch_losses['LL_train'], color='b', label="LL_train")
+        ax[0][0].plot(epoch_results['LL_train'], color='b', label="LL_train")
         ax_twin = ax[0][0].twinx()
-        ax_twin.plot(epoch_losses['LL_valid'], color='r', label="LL_valid")
+        ax_twin.plot(epoch_results['LL_valid'], color='r', label="LL_valid")
         ax[0][0].legend(loc="center right")
         ax_twin.legend(loc="lower right")
         color = ['r', 'g', 'b']
         i = 0
         j = 0
         k = 0
-        for (key, value) in epoch_losses.items():
+        for (key, value) in epoch_results.items():
             if 'C-Index' in key:
                 ax[0][1].plot(value, color=color[i], label=key)
                 ax[0][1].legend(loc="center right")
@@ -379,12 +275,32 @@ if __name__ == '__main__':
                 ax[1][1].plot(value, color=color[k], label=key)
                 ax[1][1].legend(loc="center right")
                 k += 1
+        os.makedirs('./fold_figures', exist_ok=True)
+        plt.savefig("./fold_figures/{}_fold_{}_{}_figs_({}).svg".format(
+                args.dataset,
+                fold,
+                'dha',
+                flags
+                )
+            )
+
+        epoch_results = pd.DataFrame(epoch_results)
+        os.makedirs('./epoch_results', exist_ok=True)
+        epoch_results.to_csv(
+            './epoch_results/{}_fold_{}_{}_epoch_res_({}).csv'.format(
+                args.dataset,
+                fold,
+                'dha',
+                flags
+                )
+            )
 
         print("\nEvaluating Best Model...")
         test_loglikelihood, cis, brs, roc_auc = evaluate_model(
-            best_lambdann.eval(), test_dataloader, times, et_tr, et_te
+            best_lambdann.eval(), test_dataloader, times, et_tr, et_te,
+            args.bs, args.imps, dtype, args.device
         )
-        print("Test Loglikelihood: {}".format(test_loglikelihood))
+        print("\nTest Loglikelihood: {}".format(test_loglikelihood))
         for horizon in enumerate(horizons):
             print(f"For {horizon[1]} quantile,")
             print("TD Concordance Index:", cis[horizon[0]])
@@ -406,19 +322,35 @@ if __name__ == '__main__':
             ][
                 'ROC AUC {} quantile'.format(horizon[1])
             ].append(roc_auc[horizon[0]][0])
-        if args.cv_folds == 1:
-            torch.save(
-                best_lambdann,
-                './saves/best_deephazardmixtures_n_mixtures_{}.pth'.format(
-                    args.n_mixtures
-                    )
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Stop Reason'
+        ].append(stop_reason)
+
+        args.cv_folds = fold
+        os.makedirs('./model_checkpoints', exist_ok=True)
+        torch.save(
+            best_lambdann,
+            './model_checkpoints/{}_fold_{}_{}_({}).pth'.format(
+                args.dataset, 
+                fold,
+                'dha',
+                flags
                 )
+            )
 
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [
             _[0] for _ in fold_results[key]
         ]
+
+    os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results_{}_{}.csv'.format(args.dataset, 'deep_hazard_analysis')
-    )
+        './fold_results/{}_{}_fold_results_({}).csv'.format(
+            args.dataset,
+            'dha',
+            flags
+            )
+        )
