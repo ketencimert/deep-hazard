@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--dtype', default='float64', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
-    parser.add_argument('--epochs', default=2, type=int, help='epochs')
+    parser.add_argument('--epochs', default=4000, type=int, help='epochs')
     parser.add_argument('--bs', default=256, type=int, help='batch_size')
     parser.add_argument('--imps', default=256, type=int, 
                         help='importance_samples')
