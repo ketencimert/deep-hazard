@@ -189,7 +189,7 @@ if __name__ == "__main__":
                         default=tune.choice([64, 128, 256, 512])
                         )
     parser.add_argument('--imps',
-                        default=tune.choice([int(64), int(128), int(256), int(512)])
+                        default=tune.choice([64, 128, 256, 512])
                         )
     # model, encoder-decoder args
     parser.add_argument('--n_layers',

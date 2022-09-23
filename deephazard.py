@@ -38,8 +38,7 @@ if __name__ == '__main__':
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
-    parser.add_argument('--eps', default=1e-7, type=float, help='epsilon')
-    parser.add_argument('--patience', default=10, type=float, help='patience')
+    parser.add_argument('--patience', default=800, type=float, help='patience')
     parser.add_argument('--dtype', default='float64', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
@@ -88,7 +87,9 @@ if __name__ == '__main__':
     times = np.quantile(t[e == 1], horizons).tolist()
 
     fold_results = defaultdict(lambda: defaultdict(list))
-
+    
+    criterion  = [min if 'Brier' in args.save_metric else max][0]
+    
     for fold in tqdm(range(args.cv_folds)):
 
         patience = 0
@@ -237,17 +238,21 @@ if __name__ == '__main__':
                 print("Caching Best Model...")
                 best_lambdann = deepcopy(lambdann)
 
-            final = epoch_results[args.save_metric][-1]
-            try:
-                initial = epoch_results[args.save_metric][-2]
-            except:
-                initial = -np.inf
-            delta = np.abs((final - initial) / initial)
-            if delta <= args.eps:
-                patience += 1
+            if 'Brier' in args.save_metric:
+                if epoch_results[args.save_metric][-1] > criterion(
+                        epoch_results[args.save_metric]
+                        ):
+                    patience += 1
+                else:
+                    patience = 0
             else:
-                patience = 0
-            if patience == args.patience:
+                if epoch_results[args.save_metric][-1] < criterion(
+                        epoch_results[args.save_metric]
+                        ):
+                    patience += 1
+                else:
+                    patience = 0
+            if patience >= args.patience:
                 print('Early Stopping...')
                 stop_reason = 'EARLY STOP'
                 break
