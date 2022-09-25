@@ -34,7 +34,8 @@ if __name__ == "__main__":
     #Fixed parameters
     parser.add_argument('--dataset', default='metabric_pycox')
     parser.add_argument('--cv_folds', default=5)
-    parser.add_argument('--epochs', default=1000)
+    parser.add_argument('--epochs', default=4000)
+    parser.add_argument('--device', default='cpu')
     #Tuned parameters
     parser.add_argument('--batch_size', default=[32, 64, 128, 256])
     parser.add_argument('--lr', default=[1e-4, 1e-3, 1e-2])
@@ -70,7 +71,8 @@ if __name__ == "__main__":
             key:item for key,item in vars(args).items() if key not in [
                 'dataset',
                 'cv_folds',
-                'epochs'
+                'epochs',
+                'device'
                 ]
             }
         )
@@ -116,7 +118,8 @@ if __name__ == "__main__":
                 tt.optim.Adam,
                 alpha=param['alpha'],
                 sigma=param['sigma'],
-                duration_index=labtrans.cuts
+                duration_index=labtrans.cuts,
+                device=args.device
                 )
             model.optimizer.set_lr(param['lr'])
 
@@ -153,7 +156,8 @@ if __name__ == "__main__":
             tt.optim.Adam,
             alpha=best_config['alpha'],
             sigma=best_config['sigma'],
-            duration_index=labtrans.cuts
+            duration_index=labtrans.cuts,
+            device=args.device
             )
         model.optimizer.set_lr(best_config['lr'])
 

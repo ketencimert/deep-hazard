@@ -28,11 +28,10 @@ from datasets import load_dataset
 from sklearn.model_selection import GridSearchCV
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model_name', default='survivalforest', type=str)
+    parser.add_argument('--model_name', default='gradientboosting', type=str)
     parser.add_argument('--dataset', default='metabric_pycox', type=str)
     args = parser.parse_args()
 

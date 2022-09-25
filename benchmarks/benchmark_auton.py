@@ -27,9 +27,9 @@ from auton_lab.auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffe
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
+    parser.add_argument('--epochs', default=4000, type=int)
     parser.add_argument('--model_name', default='dcm', type=str)
     parser.add_argument('--dataset', default='pbc', type=str)
 
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                     t_val.values,
                     e_val.values
                     ),
-                iters=1000,
+                iters=args.epochs,
                 **param
                 )
 
