@@ -38,7 +38,7 @@ if __name__ == "__main__":
     #Tuned parameters
     parser.add_argument('--batch_size', default=[32, 64, 128, 256])
     parser.add_argument('--lr', default=[1e-4, 1e-3, 1e-2])
-    parser.add_argument('--batch_norm', default=[True, False])
+    parser.add_argument('--batch_norm', default=[True])
     parser.add_argument('--dropout', default=[0, 0.2, 0.4, 0.6])
     parser.add_argument('--alpha', default=[0.05, 0.1, 0.4, 0.8])
     parser.add_argument('--sigma', default=[0.1])
