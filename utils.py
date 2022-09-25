@@ -14,7 +14,6 @@ from sksurv.metrics import (
     concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 )
 
-
 def evaluate_model(model, batcher, quantiles, train, valid, 
                    bs, imps, dtype, device):
 

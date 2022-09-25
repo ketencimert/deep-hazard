@@ -24,7 +24,6 @@ from datasets import SurvivalData, load_dataset
 from models import LambdaNN
 from utils import evaluate_model
 
-
 def train(lambdann, optimizer, train_dataloader, importance_samples, device):
 
     epoch_losses = dict()
@@ -52,7 +51,6 @@ def train(lambdann, optimizer, train_dataloader, importance_samples, device):
     epoch_losses['LL_train'] = tr_loglikelihood
 
     return epoch_losses
-
 
 def train_deephazard(config):
 

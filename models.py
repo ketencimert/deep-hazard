@@ -204,7 +204,6 @@ class LambdaNN(nn.Module):
 
         return nn.Softplus()(z)
 
-
 class Prior(nn.Module):
     def __init__(self, d_in, mixture_size, d_hid, n_layers, activation="relu",
                  p=0.3, norm=False, dtype=torch.double):

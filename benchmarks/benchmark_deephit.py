@@ -31,16 +31,18 @@ from datasets import load_dataset
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    #Fixed parameters
     parser.add_argument('--dataset', default='metabric_pycox')
+    parser.add_argument('--cv_folds', default=5)
+    parser.add_argument('--epochs', default=1000)
+    #Tuned parameters
     parser.add_argument('--batch_size', default=[32, 64, 128, 256])
     parser.add_argument('--lr', default=[1e-4, 1e-3, 1e-2])
-    parser.add_argument('--batch_norm', default=[True])
+    parser.add_argument('--batch_norm', default=[True, False])
     parser.add_argument('--dropout', default=[0, 0.2, 0.4, 0.6])
     parser.add_argument('--alpha', default=[0.05, 0.1, 0.4, 0.8])
     parser.add_argument('--sigma', default=[0.1])
-    parser.add_argument('--num_durations', default=[10, 20, 50, 100])
-    parser.add_argument('--cv_folds', default=5)
-    parser.add_argument('--epochs', default=1000)
+    parser.add_argument('--num_durations', default=[10, 15, 20, 25])
     args = parser.parse_args()
 
     SEED = 12345
@@ -83,9 +85,9 @@ if __name__ == "__main__":
         t_train, t_val = t[:train_size], t[train_size:]
         e_train, e_val = e[:train_size], e[train_size:]
 
-        x_test = features[folds==fold]
-        t_test = outcomes.time[folds==fold]
-        e_test = outcomes.event[folds==fold]
+        x_test = features[folds==fold].values
+        t_test = outcomes.time[folds==fold].values
+        e_test = outcomes.event[folds==fold].values
 
         param_dict = dict()
 
@@ -206,10 +208,10 @@ if __name__ == "__main__":
         max_tr = max([k[1] for k in et_train])
         while max_val > max_tr:
             idx = [k[1] for k in et_test].index(max_val)
-            et_te = np.delete(et_test, idx, 0)
+            et_test = np.delete(et_test, idx, 0)
             survival = np.delete(survival, idx, 0)
             risk = np.delete(risk, idx, 0)
-            max_val = max([k[1] for k in et_te])
+            max_val = max([k[1] for k in et_test])
 
         brs.append(
             brier_score(

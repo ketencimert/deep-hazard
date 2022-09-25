@@ -30,15 +30,17 @@ if __name__ == '__main__':
 
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model_name', default='cph', type=str)
-    parser.add_argument('--dataset', default='metabric_pycox', type=str)
+    parser.add_argument('--model_name', default='dcm', type=str)
+    parser.add_argument('--dataset', default='pbc', type=str)
 
     args = parser.parse_args()
 
     SEED = 12345
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
-    outcomes, features = load_dataset(args.dataset)
+    outcomes, features = (
+        var.astype(np.float64) for var in load_dataset(args.dataset)
+        )
 
     horizons = [0.25, 0.5, 0.75]
     times = np.quantile(outcomes.time[outcomes.event==1], horizons).tolist()
@@ -65,9 +67,9 @@ if __name__ == '__main__':
             'layers' : [[50], [50, 50], [100], [100, 100], [200, 200]]
             },
         'dcm': {
-            'k' : [3, 4, 6, 8, 10],
-            'layers' : [[50], [50, 50], [100], [100, 100], [200, 200]],
-            'batch_size': [128, 256, 512]
+            'k' : [3],
+            'layers' : [[50]],
+            'batch_size': [128, 256]
             },
         'cmhe':{
             'k':[1,2,3,],
@@ -123,9 +125,11 @@ if __name__ == '__main__':
 
         try:
             out_risk = model_.predict_risk(x_te.values, times)
+            out_risk = np.nan_to_num(out_risk, 1)
             out_survival = 1 - out_risk
         except:
             out_survival = model_.predict_survival(x_te.values, times)
+            out_survival = np.nan_to_num(out_survival, 0)
             out_risk = 1 - out_survival
 
         cis = []
