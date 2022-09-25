@@ -26,13 +26,13 @@ from models import LambdaNN
 from utils import evaluate_model
 
 import warnings
-warnings.filterwarnings("ignore", category=RuntimeWarning) 
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     # dataset
-    parser.add_argument('--dataset', default='support', type=str, 
+    parser.add_argument('--dataset', default='support', type=str,
                         help='dataset')
     parser.add_argument('--cv_folds', default=5, type=int, help='cv_folds')
     # device args
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
     parser.add_argument('--epochs', default=4000, type=int, help='epochs')
     parser.add_argument('--bs', default=256, type=int, help='batch_size')
-    parser.add_argument('--imps', default=256, type=int, 
+    parser.add_argument('--imps', default=256, type=int,
                         help='importance_samples')
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
@@ -52,14 +52,14 @@ if __name__ == '__main__':
     parser.add_argument('--d_hid', default=200, type=int, help='d_hid')
     parser.add_argument('--act', default='relu', type=str, help='activation')
     parser.add_argument('--norm', default='layer', help='normalization')
-    parser.add_argument('--save_metric', default='LL_valid', type=str, 
+    parser.add_argument('--save_metric', default='LL_valid', type=str,
                         help='save_metric')
     args = parser.parse_args()
 
-    seed = 12345
-    random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
-    
-    flags = ', '.join(
+    SEED = 12345
+    random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
+
+    FLAGS = ', '.join(
         [
             str(y) + ' ' + str(x) for (y,x) in vars(args).items() if y not in [
                 'device',
@@ -87,14 +87,14 @@ if __name__ == '__main__':
     times = np.quantile(t[e == 1], horizons).tolist()
 
     fold_results = defaultdict(lambda: defaultdict(list))
-    
+
     criterion  = [min if 'Brier' in args.save_metric else max][0]
-    
+
     for fold in tqdm(range(args.cv_folds)):
 
-        patience = 0
-        stop_reason = 'END OF EPOCHS'
-        
+        PATIENCE = 0
+        STOP_REASON = 'END OF EPOCHS'
+
         x = features[folds != fold]
         t = outcomes.time[folds != fold]
         e = outcomes.event[folds != fold]
@@ -149,11 +149,11 @@ if __name__ == '__main__':
         )
 
         d_in = x_tr.shape[1]
-        d_out = 1
+        D_OUT = 1
         d_hid = d_in // 2 if args.d_hid is None else args.d_hid
 
         lambdann = LambdaNN(
-            d_in, d_out, d_hid, args.n_layers, p=args.p,
+            d_in, D_OUT, d_hid, args.n_layers, p=args.p,
             norm=args.norm, activation=args.act
         ).to(args.device)
 
@@ -175,13 +175,13 @@ if __name__ == '__main__':
 
             print(
                 "\nFold: {} Epoch: {}, LL_train: {}, LL_valid: {}".format(
-                    fold, 
-                    epoch, 
-                    round(tr_loglikelihood, 6), 
+                    fold,
+                    epoch,
+                    round(tr_loglikelihood, 6),
                     round(val_loglikelihood, 6),
-                    )    
+                    )
                 )
-            
+
             lambdann.train()
             tr_loglikelihoods = []
             for (x, t, e) in train_dataloader:
@@ -229,9 +229,9 @@ if __name__ == '__main__':
                 epoch_results[
                     'ROC AUC {} quantile'.format(horizon[1])
                 ].append(roc_auc[horizon[0]][0])
-            
-            print('Patience: {}'.format(patience))
-            
+
+            print('Patience: {}'.format(PATIENCE))
+
             if epoch_results[args.save_metric][-1] == max(
                     epoch_results[args.save_metric]
             ):
@@ -242,19 +242,19 @@ if __name__ == '__main__':
                 if epoch_results[args.save_metric][-1] > criterion(
                         epoch_results[args.save_metric]
                         ):
-                    patience += 1
+                    PATIENCE += 1
                 else:
-                    patience = 0
+                    PATIENCE = 0
             else:
                 if epoch_results[args.save_metric][-1] < criterion(
                         epoch_results[args.save_metric]
                         ):
-                    patience += 1
+                    PATIENCE += 1
                 else:
-                    patience = 0
-            if patience >= args.patience:
+                    PATIENCE = 0
+            if PATIENCE >= args.patience:
                 print('Early Stopping...')
-                stop_reason = 'EARLY STOP'
+                STOP_REASON = 'EARLY STOP'
                 break
 
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))
@@ -285,7 +285,7 @@ if __name__ == '__main__':
                 args.dataset,
                 fold,
                 'dha',
-                flags
+                FLAGS
                 )
             )
 
@@ -296,7 +296,7 @@ if __name__ == '__main__':
                 args.dataset,
                 fold,
                 'dha',
-                flags
+                FLAGS
                 )
             )
 
@@ -331,17 +331,17 @@ if __name__ == '__main__':
             'Fold: {}'.format(fold)
         ][
             'Stop Reason'
-        ].append(stop_reason)
+        ].append(STOP_REASON)
 
         args.cv_folds = fold
         os.makedirs('./model_checkpoints', exist_ok=True)
         torch.save(
             best_lambdann,
             './model_checkpoints/{}_fold_{}_{}_({}).pth'.format(
-                args.dataset, 
+                args.dataset,
                 fold,
                 'dha',
-                flags
+                FLAGS
                 )
             )
 
@@ -356,6 +356,6 @@ if __name__ == '__main__':
         './fold_results/{}_{}_fold_results_({}).csv'.format(
             args.dataset,
             'dha',
-            flags
+            FLAGS
             )
         )

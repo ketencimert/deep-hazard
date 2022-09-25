@@ -34,7 +34,6 @@ def evaluate_model(model, batcher, quantiles, train, valid,
 
         loglikelihoods = []
         survival = []
-        ts = []
         for (x, t, e) in batcher:
             importance_sampler = Uniform(0, t)
             t_samples = importance_sampler.sample(
@@ -64,9 +63,7 @@ def evaluate_model(model, batcher, quantiles, train, valid,
 
             survival_quantile = torch.stack(survival_quantile, -1)
             survival.append(survival_quantile)
-            ts.append(t)
 
-        ts = torch.cat(ts).cpu().numpy()
         survival = torch.cat(survival).cpu().numpy()
         risk = 1 - survival
 
@@ -81,14 +78,14 @@ def evaluate_model(model, batcher, quantiles, train, valid,
 
         #Remove larger test times to confirm with
         #https://scikit-survival.readthedocs.io/en/stable/user_guide/evaluating-survival-models.html
-        max_va = max([k[1] for k in valid])
+        max_val = max([k[1] for k in valid])
         max_tr = max([k[1] for k in train])
-        while max_va > max_tr:
-            idx = [k[1] for k in valid].index(max_va)
+        while max_val > max_tr:
+            idx = [k[1] for k in valid].index(max_val)
             valid = np.delete(valid, idx, 0)
             survival = np.delete(survival, idx, 0)
             risk = np.delete(risk, idx, 0)
-            max_va = max([k[1] for k in valid])
+            max_val = max([k[1] for k in valid])
 
         brs.append(
             brier_score(

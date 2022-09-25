@@ -14,12 +14,10 @@ from tqdm import tqdm
 
 from auton_lab.auton_survival import datasets, preprocessing
 
-
 def one_hot_encode(dataframe, column):
     categorical = pd.get_dummies(dataframe[column], prefix=column)
     dataframe = dataframe.drop(column, axis=1)
     return pd.concat([dataframe, categorical], axis=1, sort=False)
-
 
 def load_dataset(
         dataset='SUPPORT',
@@ -81,61 +79,61 @@ def load_dataset(
             data=features,
             )
     elif dataset.lower() == 'support_pycox':
-            f1 = h5py.File(
-                './auton_lab/auton_survival/datasets/support_train_test.h5',
-                'r+'
-                )
-            e_tr, t_tr, x_tr = [
-                np.asarray(f1['train'][key]) for key in f1['train'].keys()
-                ]
-            e_te, t_te, x_te = [
-                np.asarray(f1['test'][key]) for key in f1['test'].keys()
-                ]
-            e = np.concatenate([e_tr, e_te])
-            t = np.concatenate([t_tr, t_te])
-            x = np.concatenate([x_tr, x_te])
-            outcomes_ = dict()
-            features_ = dict()
-            
-            feature_names = ['age',
-            'sex', 
-            'race', 
-            'number of comorbidities', 
-            'presence of diabetes', 
-            'presence of dementia', 
-            'presence of cancer',
-            'mean arterial blood pressure', 
-            'heart rate', 
-            'respiration rate',
-             'temperature', 
-             'white blood cell count', 
-             "serum’s sodium", 
-             "serum’s creatinine"
-             ]
-            
-            outcomes_['event'] = e
-            outcomes_['time'] = t
-            for i, key in enumerate(feature_names):
-                features_[key] = x[:,i]
-            outcomes = pd.DataFrame.from_dict(outcomes_)
-            features = pd.DataFrame.from_dict(features_)
-            
-            cat_feats = [
-                'sex', 
-                'race', 
-                'presence of diabetes', 
-                'presence of dementia', 
-                'presence of cancer'
-                ]
-            
-            num_feats = [key for key in features.keys() if key not in cat_feats]
-            
-            features = preprocessing.Preprocessor().fit_transform(
-            cat_feats=cat_feats,
-            num_feats=num_feats,
-            data=features,
+        f1 = h5py.File(
+            './auton_lab/auton_survival/datasets/support_train_test.h5',
+            'r+'
             )
-        
+        e_tr, t_tr, x_tr = [
+            np.asarray(f1['train'][key]) for key in f1['train'].keys()
+            ]
+        e_te, t_te, x_te = [
+            np.asarray(f1['test'][key]) for key in f1['test'].keys()
+            ]
+        e = np.concatenate([e_tr, e_te])
+        t = np.concatenate([t_tr, t_te])
+        x = np.concatenate([x_tr, x_te])
+        outcomes_ = dict()
+        features_ = dict()
+
+        feature_names = ['age',
+        'sex',
+        'race',
+        'number of comorbidities',
+        'presence of diabetes',
+        'presence of dementia',
+        'presence of cancer',
+        'mean arterial blood pressure',
+        'heart rate',
+        'respiration rate',
+         'temperature',
+         'white blood cell count',
+         "serum’s sodium",
+         "serum’s creatinine"
+         ]
+
+        outcomes_['event'] = e
+        outcomes_['time'] = t
+        for i, key in enumerate(feature_names):
+            features_[key] = x[:,i]
+        outcomes = pd.DataFrame.from_dict(outcomes_)
+        features = pd.DataFrame.from_dict(features_)
+
+        cat_feats = [
+            'sex',
+            'race',
+            'presence of diabetes',
+            'presence of dementia',
+            'presence of cancer'
+            ]
+
+        num_feats = [key for key in features.keys() if key not in cat_feats]
+
+        features = preprocessing.Preprocessor().fit_transform(
+        cat_feats=cat_feats,
+        num_feats=num_feats,
+        data=features,
+        )
+
     elif dataset.lower() == 'metabric_pycox':
         f1 = h5py.File(
             './auton_lab/auton_survival/datasets/metabric_IHC4_clinical_train_test.h5',
@@ -152,25 +150,25 @@ def load_dataset(
         x = np.concatenate([x_tr, x_te])
         outcomes_ = dict()
         features_ = dict()
-        
+
         feature_names = ['x{}'.format(i) for i in range(x.shape[1])]
-        
+
         outcomes_['event'] = e
         outcomes_['time'] = t
         for i, key in enumerate(feature_names):
             features_[key] = x[:,i]
         outcomes = pd.DataFrame.from_dict(outcomes_)
         features = pd.DataFrame.from_dict(features_)
-        
+
         cat_feats = [
-            'x4', 
-            'x5', 
-            'x6', 
-            'x7', 
+            'x4',
+            'x5',
+            'x6',
+            'x7',
             ]
-        
+
         num_feats = [key for key in features.keys() if key not in cat_feats]
-        
+
         features = preprocessing.Preprocessor().fit_transform(
         cat_feats=cat_feats,
         num_feats=num_feats,
@@ -230,4 +228,3 @@ class SurvivalData(torch.utils.data.Dataset):
     def input_size(self):
 
         return self.input_size_
-

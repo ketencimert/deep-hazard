@@ -13,8 +13,6 @@ from torch.distributions.uniform import Uniform
 
 from auton_lab.auton_survival import datasets, preprocessing
 
-from models import LambdaNN
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -83,5 +81,3 @@ if __name__ == '__main__':
             plt.ylabel('Frequency')
             plt.plot(density.detach().cpu().numpy(), color='b')
             plt.show()
-    
-    

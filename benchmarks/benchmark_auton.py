@@ -24,21 +24,19 @@ from auton_lab.auton_survival.models.cph import DeepCoxPH
 from auton_lab.auton_survival.models.dcm import DeepCoxMixtures
 from auton_lab.auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--device', default='cuda', type=str)
-    parser.add_argument('--random_seed', default=1, type=int)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--model_name', default='cph', type=str)
     parser.add_argument('--dataset', default='metabric_pycox', type=str)
 
     args = parser.parse_args()
 
-    seed = 12345
-    random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
+    SEED = 12345
+    random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
     outcomes, features = load_dataset(args.dataset)
 
@@ -57,27 +55,27 @@ if __name__ == '__main__':
 
     param_grid = {
         'dsm': {
-            'k' : [3, 4, 6],
+            'k' : [3, 4, 6, 8, 10],
             'distribution' : ['LogNormal', 'Weibull'],
-            'learning_rate' : [ 1e-4, 1e-3],
-            'layers' : [ [50], [50, 50], [100], [100, 100] ],
-            'discount': [ 1/2, 3/4, 1 ]
+            'learning_rate' : [1e-4, 5e-4, 1e-3],
+            'layers' : [[50], [50, 50], [100], [100, 100], [200, 200]],
+            'discount': [1/2, 3/4, 1]
             },
         'cph': {
-            'layers' : [ [50] ]
+            'layers' : [[50], [50, 50], [100], [100, 100], [200, 200]]
             },
         'dcm': {
-            'k' : [3, 4, 6], 
-            'layers' : [ [50], [50, 50], [100], [100, 100] ],
-            'batch_size': [ 128 ]
+            'k' : [3, 4, 6, 8, 10],
+            'layers' : [[50], [50, 50], [100], [100, 100], [200, 200]],
+            'batch_size': [128, 256, 512]
             },
         'cmhe':{
-            'k':[1,2,3,], 
-            'g':[1,2,3], 
+            'k':[1,2,3,],
+            'g':[1,2,3],
             'a':[],
             },
         }[args.model_name]
- 
+
     for fold in tqdm(range(args.cv_folds)):
 
         model = {
@@ -91,13 +89,13 @@ if __name__ == '__main__':
         t = outcomes.time[folds!=fold]
         e = outcomes.event[folds!=fold]
 
-        x_train, x_val = x[:tr_size], x[tr_size:]
-        t_train, t_val = t[:tr_size], t[tr_size:]
-        e_train, e_val = e[:tr_size], e[tr_size:]
+        x_tr, x_val = x[:tr_size], x[tr_size:]
+        t_tr, t_val = t[:tr_size], t[tr_size:]
+        e_tr, e_val = e[:tr_size], e[tr_size:]
 
-        x_test = features[folds==fold]
-        t_test = outcomes.time[folds==fold]
-        e_test = outcomes.event[folds==fold]
+        x_te = features[folds==fold]
+        t_te = outcomes.time[folds==fold]
+        e_te = outcomes.event[folds==fold]
 
         params = ParameterGrid(param_grid)
 
@@ -107,9 +105,9 @@ if __name__ == '__main__':
                 )
 
             model_, loss = model_.fit(
-                x=x_train.values,
-                t=t_train.values,
-                e=e_train.values,
+                x=x_tr.values,
+                t=t_tr.values,
+                e=e_tr.values,
                 val_data=(
                     x_val.values,
                     t_val.values,
@@ -122,22 +120,22 @@ if __name__ == '__main__':
             model_dict[model_] = np.mean(loss)
 
         model_ = min(model_dict, key=model_dict.get)
-        
+
         try:
-            out_risk = model_.predict_risk(x_test.values, times)
+            out_risk = model_.predict_risk(x_te.values, times)
             out_survival = 1 - out_risk
         except:
-            out_survival = model_.predict_survival(x_test.values, times)
+            out_survival = model_.predict_survival(x_te.values, times)
             out_risk = 1 - out_survival
-            
+
         cis = []
         brs = []
 
-        et_train = np.array(
-            [(e_train.values[i], t_train.values[i]) for i in range(len(e_train))],
+        et_tr = np.array(
+            [(e_tr.values[i], t_tr.values[i]) for i in range(len(e_tr))],
                           dtype = [('e', bool), ('t', float)])
-        et_test = np.array(
-            [(e_test.values[i], t_test.values[i]) for i in range(len(e_test))],
+        et_te = np.array(
+            [(e_te.values[i], t_te.values[i]) for i in range(len(e_te))],
                           dtype = [('e', bool), ('t', float)])
         et_val = np.array(
             [(e_val.values[i], t_val.values[i]) for i in range(len(e_val))],
@@ -146,31 +144,31 @@ if __name__ == '__main__':
         for i, _ in enumerate(times):
             cis.append(
                 concordance_index_ipcw(
-                    et_train, 
-                    et_test, 
-                    out_risk[:, i], 
+                    et_tr,
+                    et_te,
+                    out_risk[:, i],
                     times[i]
                     )[0]
                 )
-        
-        max_te = max([k[1] for k in et_test])
-        max_tr = max([k[1] for k in et_train])
-        
+
+        max_te = max([k[1] for k in et_te])
+        max_tr = max([k[1] for k in et_tr])
+
         while max_te > max_tr:
-            idx = [k[1] for k in et_test].index(max_te)
-            et_test = np.delete(et_test, idx, 0)
+            idx = [k[1] for k in et_te].index(max_te)
+            et_te = np.delete(et_te, idx, 0)
             out_survival = np.delete(out_survival, idx, 0)
             out_risk = np.delete(out_risk, idx, 0)
-            max_te = max([k[1] for k in et_test])
-            
-        brs.append(brier_score(et_train, et_test, out_survival, times)[1])
+            max_te = max([k[1] for k in et_te])
+
+        brs.append(brier_score(et_tr, et_te, out_survival, times)[1])
         roc_auc = []
         for i, _ in enumerate(times):
             roc_auc.append(
                 cumulative_dynamic_auc(
-                    et_train, 
-                    et_test, 
-                    out_risk[:, i], 
+                    et_tr,
+                    et_te,
+                    out_risk[:, i],
                     times[i]
                     )[0]
                 )
@@ -206,7 +204,7 @@ if __name__ == '__main__':
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
         './fold_results/fold_results_{}_{}.csv'.format(
-            args.dataset, 
+            args.dataset,
             args.model_name
             )
         )

@@ -81,13 +81,11 @@ def train_deephazard(config):
 
     folds = np.array(list(range(config['cv_folds'])) * n)[:n] #e.g. 5 -> int
 
-    #we are optimizing with respect to first fold validation set of 5 folds
-    fold = 0
-
-    #filter w.r.t. first fold
-    x = features[folds != fold]
-    t = outcomes.time[folds != fold]
-    e = outcomes.event[folds != fold]
+    #we are optimizing with respect to nth fold validation set of 5 folds
+    #filter w.r.t. the fold
+    x = features[folds != config['fold']]
+    t = outcomes.time[folds != config['fold']]
+    e = outcomes.event[folds != config['fold']]
 
     x_tr, x_val = x[:tr_size], x[tr_size:]
     t_tr, t_val = t[:tr_size], t[tr_size:]
@@ -170,8 +168,11 @@ def train_deephazard(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # dataset
+    #ARGS TO CHANGE
     parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--fold', default=0, type=int)
+    # ARGS TO KEEP FIXED:
+    # dataset
     parser.add_argument('--cv_folds', default=5, type=int)
     # device args
     parser.add_argument('--seed', default=12345, type=int)
@@ -249,8 +250,9 @@ if __name__ == "__main__":
 
     os.makedirs('./tune_results', exist_ok=True)
     with open(
-            './tune_results/deephazarda_tuned_parameters_{}.json'.format(
-                config['dataset']
+            './tune_results/{}_dha_fold_{}_tuned_parameters.json'.format(
+                config['dataset'],
+                config['fold']
                 )
         , 'w') as f:
         json.dump(config, f)
