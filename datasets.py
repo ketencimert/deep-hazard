@@ -174,7 +174,51 @@ def load_dataset(
         num_feats=num_feats,
         data=features,
         )
+    
+    elif 'aki' in dataset.lower() and 'ckd' in dataset.lower():
+        
+        data = pd.read_csv(
+            './columbia-aki-ckd/aki-ckd-filtered_use_{}.csv'.format(
+                dataset.lower().split('_')[-1]
+                )
+            )
+        # data = data[~data['time'].isna()]
 
+        #let's not use these "pseudo-categorical variables in our experiments"
+        pseudo_categorical = [
+            key for key in data.keys() if 'categorical' in key
+            ]
+        
+        data = data.drop(
+            columns=[
+                'Unnamed: 0', 
+                'person_id', 
+                'beg_date', 
+                'event_date',
+                'cohort_end_date'
+                ] + pseudo_categorical
+            )
+        
+        data = data.sample(frac=1).reset_index(drop=True)
+        
+        outcomes = data[['time', 'event']]
+        features = data[[x for x in data.keys() if x not in outcomes.keys()]]
+        
+        num_feats = [key for key in features.keys() if 'numerical' in key]
+        num_feats.append('age')
+        
+        cat_feats = list(set(features.keys()) - set(num_feats))
+        
+        features = preprocessing.Preprocessor().fit_transform(
+        cat_feats=cat_feats,
+        num_feats=num_feats,
+        data=features,
+        # one_hot=False
+        )
+        
+        features = features[~outcomes.time.isna()]
+        outcomes = outcomes[~outcomes.time.isna()]
+        
     outcomes.time = outcomes.time + 1e-15
 
     if scale_time:
