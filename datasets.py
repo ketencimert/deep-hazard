@@ -182,6 +182,9 @@ def load_dataset(
                 dataset.lower().split('_')[-1]
                 )
             )
+        drop = [x for x in features.keys() if 'unnamed' in x.lower()]
+        data = data.drop(columns = drop)
+
         # data = data[~data['time'].isna()]
 
         #let's not use these "pseudo-categorical variables in our experiments"
