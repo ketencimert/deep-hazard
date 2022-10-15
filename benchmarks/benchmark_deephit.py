@@ -39,7 +39,7 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
         out_features,
         batch_norm,
         dropout,
-        )
+        ).to(args.device)
 
     model = DeepHitSingle(
         net,
@@ -69,10 +69,10 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     #Fixed parameters
-    parser.add_argument('--dataset', default='support')
-    parser.add_argument('--cv_folds', default=5)
-    parser.add_argument('--epochs', default=4000)
-    parser.add_argument('--device', default='cpu')
+    parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--cv_folds', default=5, type=int)
+    parser.add_argument('--epochs', default=4000, type=int)
+    parser.add_argument('--device', default='cpu', type=str)
     #Tuned parameters
     parser.add_argument('--batch_size', default=[64, 128, 256, 512, 1024])
     parser.add_argument('--lr', default=[1e-4, 1e-3])

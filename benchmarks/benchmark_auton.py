@@ -84,7 +84,9 @@ if __name__ == '__main__':
         }[args.model_name]
 
     params = ParameterGrid(param_grid)
-
+    
+    HYPERPARAMETER_SAMPLES = min(HYPERPARAMETER_SAMPLES, len(params))
+    
     params = [
         params[_] for _ in np.random.choice(
             len(params),
