@@ -217,9 +217,9 @@ if __name__ == '__main__':
 
             for horizon in enumerate(horizons):
                 print(f"For {horizon[1]} quantile,")
-                print("TD Concordance Index:", round(cis[horizon[0]], 5))
-                print("Brier Score:", round(brs[0][horizon[0]], 6))
-                print("ROC AUC:", round(roc_auc[horizon[0]][0], 6), "\n")
+                print("TD Concordance Index:", cis[horizon[0]])
+                print("Brier Score:", brs[0][horizon[0]])
+                print("ROC AUC:", roc_auc[horizon[0]][0], "\n")
                 epoch_results[
                     'C-Index {} quantile'.format(horizon[1])
                 ].append(cis[horizon[0]])
@@ -333,7 +333,6 @@ if __name__ == '__main__':
             'Stop Reason'
         ].append(STOP_REASON)
 
-        args.cv_folds = fold
         os.makedirs('./model_checkpoints', exist_ok=True)
         torch.save(
             best_lambdann,
