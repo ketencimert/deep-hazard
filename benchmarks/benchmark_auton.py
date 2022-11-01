@@ -121,7 +121,7 @@ if __name__ == '__main__':
 
             param['layers'] = param['nodes_'] * param['layers_']
 
-            model_ = model(**param
+            model_ = model(**param, device=args.device
                 )
 
             model_, loss = model_.fit(

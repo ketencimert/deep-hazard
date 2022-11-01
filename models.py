@@ -8,7 +8,7 @@ Created on Sun May 29 20:22:26 2022
 import torch
 from torch import nn
 from torch.distributions.normal import Normal
-
+from torch.distributions.exponential import Exponential
 from itertools import chain
 
 class DeepHazardMixture(nn.Module):
@@ -98,9 +98,11 @@ class ExplainableLambdaNN(nn.Module):
 
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
-                 p=0.3, norm=False, dtype=torch.double):
+                 p=0.3, norm=False, dtype=torch.double, noise_dist='normal'):
         super().__init__()
-
+        
+        self.noise_dist = noise_dist
+        
         act_fn = {
             'relu':nn.ReLU(),
             'elu':nn.ELU(),
@@ -191,8 +193,15 @@ class LambdaNN(nn.Module):
         x = self.feature_net(x)
 
         if self.training:
-
-            t = Normal(loc=t, scale=1).sample()
+            if self.noise_dist == 'exponential':
+                t = Exponential(rate=1/t).sample()
+            elif self.noise_dist == 'std_normal':
+                t = Normal(loc=t, scale=1).sample()
+            elif self.noise_dist == 'normal':
+                t_ = Normal(loc=t, scale=t.std()).sample()
+                t = t_ * (t_ > 0) +  t * (t_ <= 0)
+            else:
+                t = t
 
         t = self.time_net(t.reshape(-1,1))
 
