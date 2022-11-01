@@ -52,12 +52,12 @@ def get_optimizer(model, lr):
                               ' is not implemented')
 
 def pretrain_dsm(model, t_train, e_train, t_valid, e_valid,
-                 n_iter=10000, lr=1e-2, thres=1e-4, device='cpu'):
+                 n_iter=10000, lr=1e-2, thres=1e-4):
 
   premodel = DeepSurvivalMachinesTorch(1, 1,
                                        dist=model.dist,
                                        risks=model.risks,
-                                       optimizer=model.optimizer).to(device)
+                                       optimizer=model.optimizer)
   premodel.double()
 
   optimizer = get_optimizer(premodel, lr)
@@ -115,7 +115,7 @@ def train_dsm(model,
               x_train, t_train, e_train,
               x_valid, t_valid, e_valid,
               n_iter=10000, lr=1e-3, elbo=True,
-              bs=100, device='cpu'):
+              bs=100):
   """Function to train the torch instance of the model."""
 
   logging.info('Pretraining the Underlying Distributions...')
@@ -133,7 +133,7 @@ def train_dsm(model,
                           e_valid_,
                           n_iter=10000,
                           lr=1e-2,
-                          thres=1e-4, device=device)
+                          thres=1e-4)
 
   for r in range(model.risks):
     model.shape[str(r+1)].data.fill_(float(premodel.shape[str(r+1)]))

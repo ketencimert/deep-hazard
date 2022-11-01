@@ -180,7 +180,7 @@ __pdoc__["DSMBase"] = False
 class DSMBase():
   """Base Class for all DSM models"""
 
-  def __init__(self, device, k=3, layers=None, distribution="Weibull",
+  def __init__(self, k=3, layers=None, distribution="Weibull",
                temp=1000., discount=1.0, **extras):
     self.k = k
     self.layers = layers
@@ -188,8 +188,7 @@ class DSMBase():
     self.temp = temp
     self.discount = discount
     self.fitted = False
-    self.device = device
-    
+
   def _gen_torch_model(self, inputdim, optimizer, risks):
     """Helper function to return a torch model."""
     return DeepSurvivalMachinesTorch(inputdim,
@@ -199,11 +198,11 @@ class DSMBase():
                                      temp=self.temp,
                                      discount=self.discount,
                                      optimizer=optimizer,
-                                     risks=risks).to(self.device)
+                                     risks=risks)
 
   def fit(self, x, t, e, vsize=0.15, val_data=None,
           iters=1, learning_rate=1e-3, batch_size=100,
-          elbo=True, optimizer="Adam", random_state=100,**extras):
+          elbo=True, optimizer="Adam", random_state=100, **extras):
 
     r"""This method is used to train an instance of the DSM model.
 
@@ -258,10 +257,9 @@ class DSMBase():
                          n_iter=iters,
                          lr=learning_rate,
                          elbo=elbo,
-                         bs=batch_size,
-                         device=self.device)
+                         bs=batch_size)
 
-    self.torch_model = model.eval().cpu()
+    self.torch_model = model.eval()
     self.fitted = True
 
     return self, loss
@@ -311,9 +309,9 @@ class DSMBase():
     np.random.shuffle(idx)
     x_train, t_train, e_train = x[idx], t[idx], e[idx]
 
-    x_train = torch.from_numpy(x_train).double().to(self.device)
-    t_train = torch.from_numpy(t_train).double().to(self.device)
-    e_train = torch.from_numpy(e_train).double().to(self.device)
+    x_train = torch.from_numpy(x_train).double()
+    t_train = torch.from_numpy(t_train).double()
+    e_train = torch.from_numpy(e_train).double()
 
     if val_data is None:
 
@@ -328,9 +326,9 @@ class DSMBase():
 
       x_val, t_val, e_val = val_data
 
-      x_val = torch.from_numpy(x_val).double().to(self.device)
-      t_val = torch.from_numpy(t_val).double().to(self.device)
-      e_val = torch.from_numpy(e_val).double().to(self.device)
+      x_val = torch.from_numpy(x_val).double()
+      t_val = torch.from_numpy(t_val).double()
+      e_val = torch.from_numpy(e_val).double()
 
     return (x_train, t_train, e_train, x_val, t_val, e_val)
 

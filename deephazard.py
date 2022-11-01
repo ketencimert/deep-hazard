@@ -39,13 +39,12 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
     parser.add_argument('--patience', default=800, type=float, help='patience')
-    parser.add_argument('--dtype', default='float32', type=str, help='dtype')
-    parser.add_argument('--noise_dist', default='normal', type=str, help='dtype')
+    parser.add_argument('--dtype', default='float64', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
     parser.add_argument('--epochs', default=4000, type=int, help='epochs')
-    parser.add_argument('--bs', default=512, type=int, help='batch_size')
-    parser.add_argument('--imps', default=512, type=int,
+    parser.add_argument('--bs', default=256, type=int, help='batch_size')
+    parser.add_argument('--imps', default=256, type=int,
                         help='importance_samples')
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
@@ -80,7 +79,7 @@ if __name__ == '__main__':
     x, t, e = features, outcomes.time, outcomes.event
     n = len(features)
     tr_size = int(n * 0.7)
-    all_times = [t.min(), t.max()]
+
     folds = np.array(list(range(args.cv_folds)) * n)[:n]
     np.random.shuffle(folds)
 
@@ -155,8 +154,7 @@ if __name__ == '__main__':
 
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
-            norm=args.norm, activation=args.act, noise_dist=args.noise_dist,
-            dtype=dtype
+            norm=args.norm, activation=args.act
         ).to(args.device)
 
         optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
@@ -172,7 +170,6 @@ if __name__ == '__main__':
         tr_loglikelihood = - np.inf
         val_loglikelihood = - np.inf
         c_idx = - np.inf
-
 
         for epoch in range(args.epochs):
 
@@ -210,9 +207,9 @@ if __name__ == '__main__':
 
             print("\nValidating Model...")
             # validate the model
-            val_loglikelihood, cis, brs, roc_auc, _ = evaluate_model(
+            val_loglikelihood, cis, brs, roc_auc = evaluate_model(
                 lambdann.eval(), valid_dataloader, times, et_tr, et_val,
-                args.bs, args.imps,
+                args.bs, args.imps, dtype, args.device
             )
 
             epoch_results['LL_train'].append(tr_loglikelihood)
@@ -304,17 +301,10 @@ if __name__ == '__main__':
             )
 
         print("\nEvaluating Best Model...")
-
-        test_loglikelihood, cis, brs, roc_auc, _ = evaluate_model(
+        test_loglikelihood, cis, brs, roc_auc = evaluate_model(
             best_lambdann.eval(), test_dataloader, times, et_tr, et_te,
-            args.bs, args.imps
+            args.bs, args.imps, dtype, args.device
         )
-
-        _, cis_ant, brs_int, _, _ = evaluate_model(
-            best_lambdann.eval(), test_dataloader, times, et_tr, et_te,
-            args.bs, args.imps, True
-        )
-
         print("\nTest Loglikelihood: {}".format(test_loglikelihood))
         for horizon in enumerate(horizons):
             print(f"For {horizon[1]} quantile,")
@@ -337,19 +327,6 @@ if __name__ == '__main__':
             ][
                 'ROC AUC {} quantile'.format(horizon[1])
             ].append(roc_auc[horizon[0]][0])
-
-        fold_results[
-            'Fold: {}'.format(fold)
-            ][
-                'Antolini C-Index'
-                ] = [cis_ant]
-
-        fold_results[
-            'Fold: {}'.format(fold)
-            ][
-                'Integrated Brier Score'
-                ] = [brs_int]
-
         fold_results[
             'Fold: {}'.format(fold)
         ][

@@ -22,8 +22,8 @@ def randargmax(b,**kw):
 
 def partial_ll_loss(lrisks, tb, eb, eps=1e-2):
 
-  tb = tb.cpu() + eps*np.random.random(len(tb))
-  sindex = np.argsort(-tb.cpu())
+  tb = tb + eps*np.random.random(len(tb))
+  sindex = np.argsort(-tb)
 
   tb = tb[sindex]
   eb = eb[sindex]
@@ -49,7 +49,7 @@ def smooth_bl_survival(breslow, smoothing_factor):
   return fit_spline(x, y, s=smoothing_factor)
 
 def get_probability_(lrisks, ts, spl):
-  risks = np.exp(lrisks.cpu())
+  risks = np.exp(lrisks)
   s0ts = (-risks)*(spl(ts)**(risks-1))
   return s0ts * spl.derivative()(ts)
 
@@ -124,7 +124,7 @@ def q_function(model, x, t, e, posteriors, typ='soft'):
 
   #log_smax_loss = -torch.nn.LogSoftmax(dim=1)(gates) # tf.nn.log_softmax(gates)
 
-  gate_loss = posteriors.exp().cuda()*gates
+  gate_loss = posteriors.exp()*gates
   gate_loss = -torch.sum(gate_loss)
   loss+=gate_loss
 

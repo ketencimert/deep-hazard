@@ -87,7 +87,7 @@ class DeepCoxMixtures:
 
   """
 
-  def __init__(self, device, k=3, layers=None, gamma=1,
+  def __init__(self, k=3, layers=None, gamma=1,
                smoothing_factor=1e-2, use_activation=False, **extras):
 
     self.k = k
@@ -96,8 +96,7 @@ class DeepCoxMixtures:
     self.gamma = gamma
     self.smoothing_factor = smoothing_factor
     self.use_activation = use_activation
-    self.device = device
-    
+
   def __call__(self):
     if self.fitted:
       print("A fitted instance of the Deep Cox Mixtures model")
@@ -117,9 +116,9 @@ class DeepCoxMixtures:
     np.random.shuffle(idx)
     x_train, t_train, e_train = x[idx], t[idx], e[idx]
 
-    x_train = torch.from_numpy(x_train).float().to(self.device)
-    t_train = torch.from_numpy(t_train).float().to(self.device)
-    e_train = torch.from_numpy(e_train).float().to(self.device)
+    x_train = torch.from_numpy(x_train).float()
+    t_train = torch.from_numpy(t_train).float()
+    e_train = torch.from_numpy(e_train).float()
 
     if val_data is None:
 
@@ -134,9 +133,9 @@ class DeepCoxMixtures:
 
       x_val, t_val, e_val = val_data
 
-      x_val = torch.from_numpy(x_val).float().to(self.device)
-      t_val = torch.from_numpy(t_val).float().to(self.device)
-      e_val = torch.from_numpy(e_val).float().to(self.device)
+      x_val = torch.from_numpy(x_val).float()
+      t_val = torch.from_numpy(t_val).float()
+      e_val = torch.from_numpy(e_val).float()
 
     return (x_train, t_train, e_train, x_val, t_val, e_val)
 
@@ -147,7 +146,7 @@ class DeepCoxMixtures:
                                 gamma=self.gamma,
                                 use_activation=self.use_activation,
                                 layers=self.layers,
-                                optimizer=optimizer).to(self.device)
+                                optimizer=optimizer)
 
   def fit(self, x, t, e, vsize=0.15, val_data=None,
           iters=1, learning_rate=1e-3, batch_size=100,
@@ -204,7 +203,7 @@ class DeepCoxMixtures:
                          smoothing_factor=self.smoothing_factor,
                          use_posteriors=True)
 
-    self.torch_model = (model[0].eval().cpu(), model[1].cpu())
+    self.torch_model = (model[0].eval(), model[1])
     self.fitted = True
 
     return self, loss
