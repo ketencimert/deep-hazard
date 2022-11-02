@@ -42,7 +42,7 @@ def evaluate_model(model, batcher, quantiles, train, valid,
             loglikelihood = (
                     model(x=x, t=t).log().squeeze(-1) * e
                     - torch.mean(
-                model(x=x, t=t_samples).view(x.size(0), -1),
+                model(x=x, t=t_samples),
                 -1) * t
             ).mean()
 
@@ -55,7 +55,7 @@ def evaluate_model(model, batcher, quantiles, train, valid,
                 int_lambdann = torch.mean(
                     model(
                         x=x,
-                        t=t_samples_[:x.size(0), :, i]).view(x.size(0), -1),
+                        t=t_samples_[:x.size(0), :, i]),
                     -1) * quantiles[i]
 
                 survival_quantile.append(torch.exp(-int_lambdann))

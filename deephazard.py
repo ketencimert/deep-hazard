@@ -193,7 +193,7 @@ if __name__ == '__main__':
                 train_loglikelihood = (
                         lambdann(x=x, t=t).log().squeeze(-1) * e
                         - torch.mean(
-                    lambdann(x=x, t=t_samples).view(x.size(0), -1),
+                    lambdann(x=x, t=t_samples),
                     -1) * t
                 ).mean()
 

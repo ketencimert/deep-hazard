@@ -187,6 +187,7 @@ class LambdaNN(nn.Module):
 
     def forward(self, x, t):
 
+        size = x.size(0)
         x = self.noise(x)
         x = self.feature_net(x)
 
@@ -202,7 +203,7 @@ class LambdaNN(nn.Module):
 
         z = self.shared_net(torch.cat([x, t], -1))
 
-        return nn.Softplus()(z)
+        return nn.Softplus()(z).view(size, -1)
 
 class Prior(nn.Module):
     def __init__(self, d_in, mixture_size, d_hid, n_layers, activation="relu",

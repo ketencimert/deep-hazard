@@ -70,7 +70,7 @@ if __name__ == '__main__':
                     torch.exp(
                         best_lambdann(x=x_, t=t_).log()
                         - torch.mean(
-                            best_lambdann(x=x_, t=t_samples).view(x_.size(0), -1),
+                            best_lambdann(x=x_, t=t_samples),
                             -1) * t_
                         ).squeeze(-1)
                     )
