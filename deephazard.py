@@ -25,13 +25,15 @@ from tqdm import tqdm
 from datasets import SurvivalData, load_dataset
 from models import LambdaNN
 from utils import evaluate_model, get_survival_curve
+from deephazard_raytune import tune_deephazard
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
+    #tune
+    parser.add_argument('--tune', action='store_true', help='tune_args')
     # dataset
     parser.add_argument('--dataset', default='support', type=str,
                         help='dataset')
@@ -152,9 +154,12 @@ if __name__ == '__main__':
             test_data, batch_size=args.bs, shuffle=False
         )
 
-        d_in = x_tr.shape[1]
+        d_in = train_dataloader.dataset.input_size()
         D_OUT = 1
         d_hid = d_in // 2 if args.d_hid is None else args.d_hid
+
+        if args.tune:
+            args = tune_deephazard(args, SEED, fold)
 
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
@@ -213,7 +218,7 @@ if __name__ == '__main__':
             # validate the model
             val_loglikelihood, cis, brs, roc_auc = evaluate_model(
                 lambdann.eval(), valid_dataloader, times, et_tr, et_val,
-                args.bs, args.imps, dtype, args.device
+                args.bs, args.imps,
             )
 
             epoch_results['LL_train'].append(tr_loglikelihood)
@@ -307,7 +312,7 @@ if __name__ == '__main__':
         print("\nEvaluating Best Model...")
         test_loglikelihood, cis, brs, roc_auc = evaluate_model(
             best_lambdann.eval(), test_dataloader, times, et_tr, et_te,
-            args.bs, args.imps, dtype, args.device
+            args.bs, args.imps,
         )
 
         surv = get_survival_curve(

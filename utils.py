@@ -31,9 +31,9 @@ def build_times(times, slices):
         times_.append([times[i]])
     times_.insert(0,[0])
     times_ = [float(item) for sublist in times_ for item in sublist]
-    
+
     indexes = [times_.index(q) for q in times]
-    
+
     return times_, indexes
 
 def compute_survival(model, x, times, imps, slices=1):
@@ -43,7 +43,7 @@ def compute_survival(model, x, times, imps, slices=1):
     with torch.no_grad():
         dtype = model.feature_net[0].weight.dtype
         quantiles_, indexes = build_times(
-            times, 
+            times,
             slices
             )
         survival = [
@@ -75,10 +75,10 @@ def get_survival_curve(model, batcher, times, imps):
                 ):
             survival.append(
                 compute_survival(
-                    model, 
+                    model,
                     x,
                     times,
-                    imps, 
+                    imps,
                     slices=1,
                     )
                 )
@@ -89,12 +89,14 @@ def get_survival_curve(model, batcher, times, imps):
             )
         return survival
 
-def evaluate_model(model, batcher, quantiles, train, valid, 
-                   bs, imps, dtype, device):
+def evaluate_model(model, batcher, times, train, valid, bs, imps):
+
+    dtype = model.feature_net[0].weight.dtype
+    device = model.feature_net[0].weight.device
 
     with torch.no_grad():
 
-        times_tensor = torch.tensor(quantiles, dtype=dtype).to(device)
+        times_tensor = torch.tensor(times, dtype=dtype).to(device)
         times_tensor = times_tensor.unsqueeze(-1).repeat_interleave(
             bs, -1
         ).T
@@ -126,12 +128,12 @@ def evaluate_model(model, batcher, quantiles, train, valid,
             # For C-Index and Brier Score
 
             survival_quantile = []
-            for i in range(len(quantiles)):
+            for i in range(len(times)):
                 int_lambdann = torch.mean(
                     model(
                         x=x,
                         t=t_samples_[:x.size(0), :, i]),
-                    -1) * quantiles[i]
+                    -1) * times[i]
 
                 survival_quantile.append(torch.exp(-int_lambdann))
 
@@ -143,15 +145,13 @@ def evaluate_model(model, batcher, quantiles, train, valid,
 
         cis = []
         brs = []
-        for i, _ in enumerate(quantiles):
+        for i, _ in enumerate(times):
             cis.append(
                 concordance_index_ipcw(
-                    train, valid, risk[:, i], quantiles[i]
+                    train, valid, risk[:, i], times[i]
                 )[0]
             )
 
-        #Remove larger test times to confirm with
-        #https://scikit-survival.readthedocs.io/en/stable/user_guide/evaluating-survival-models.html
         max_val = max([k[1] for k in valid])
         max_tr = max([k[1] for k in train])
         while max_val > max_tr:
@@ -163,15 +163,15 @@ def evaluate_model(model, batcher, quantiles, train, valid,
 
         brs.append(
             brier_score(
-                train, valid, survival, quantiles
+                train, valid, survival, times
             )[1]
         )
 
         roc_auc = []
-        for i, _ in enumerate(quantiles):
+        for i, _ in enumerate(times):
             roc_auc.append(
                 cumulative_dynamic_auc(
-                    train, valid, risk[:, i], quantiles[i]
+                    train, valid, risk[:, i], times[i]
                 )[0]
             )
 
