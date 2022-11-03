@@ -4,7 +4,7 @@ Created on Tue Jun 14 09:47:07 2022
 
 @author: Mert
 """
-
+import numpy as np
 import pandas as pd
 
 from pycox.datasets import flchain
@@ -168,8 +168,8 @@ def load_dataset(
     return outcomes, features
 
 class SurvivalData(torch.utils.data.Dataset):
-    def __init__(self, x, t, e, device, dtype=torch.double):
-
+    def __init__(self, x, t, e, bs, device, dtype=torch.double):
+        self.bs = bs
         self.ds = [
             [
                 torch.tensor(x, dtype=dtype),
@@ -208,3 +208,6 @@ class SurvivalData(torch.utils.data.Dataset):
     def input_size(self):
 
         return self.input_size_
+
+    def __blen__(self):
+        return int(np.ceil(self.__len__() / self.bs))

@@ -239,7 +239,8 @@ if __name__ == "__main__":
         progress_reporter=reporter,
         scheduler=scheduler,
         search_alg=searcher,
-        raise_on_failed_trial=False)
+        raise_on_failed_trial=False
+        )
 
     config = result.get_best_config(
         metric='_metric/'+config['save_metric'],

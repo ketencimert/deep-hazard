@@ -13,6 +13,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pycox.evaluation import EvalSurv
 import random
 
 import torch
@@ -23,7 +24,7 @@ from tqdm import tqdm
 
 from datasets import SurvivalData, load_dataset
 from models import LambdaNN
-from utils import evaluate_model
+from utils import evaluate_model, get_survival_curve
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -39,12 +40,12 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
     parser.add_argument('--patience', default=800, type=float, help='patience')
-    parser.add_argument('--dtype', default='float64', type=str, help='dtype')
+    parser.add_argument('--dtype', default='float32', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
     parser.add_argument('--epochs', default=4000, type=int, help='epochs')
     parser.add_argument('--bs', default=256, type=int, help='batch_size')
-    parser.add_argument('--imps', default=256, type=int,
+    parser.add_argument('--imps', default=512, type=int,
                         help='importance_samples')
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     x, t, e = features, outcomes.time, outcomes.event
     n = len(features)
     tr_size = int(n * 0.7)
-
+    all_times = [t.min(), t.max()]
     folds = np.array(list(range(args.cv_folds)) * n)[:n]
     np.random.shuffle(folds)
 
@@ -129,13 +130,16 @@ if __name__ == '__main__':
         )
 
         train_data = SurvivalData(
-            x_tr.values, t_tr.values, e_tr.values, args.device, dtype
+            x_tr.values, t_tr.values, e_tr.values,
+            args.bs, args.device, dtype
         )
         valid_data = SurvivalData(
-            x_val.values, t_val.values, e_val.values, args.device, dtype
+            x_val.values, t_val.values, e_val.values,
+            args.bs, args.device, dtype
         )
         test_data = SurvivalData(
-            x_te.values, t_te.values, e_te.values, args.device, dtype
+            x_te.values, t_te.values, e_te.values, 
+            args.bs, args.device, dtype
         )
 
         train_dataloader = DataLoader(
@@ -154,7 +158,7 @@ if __name__ == '__main__':
 
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
-            norm=args.norm, activation=args.act
+            norm=args.norm, activation=args.act, dtype=dtype
         ).to(args.device)
 
         optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
@@ -193,9 +197,9 @@ if __name__ == '__main__':
                 train_loglikelihood = (
                         lambdann(x=x, t=t).log().squeeze(-1) * e
                         - torch.mean(
-                    lambdann(x=x, t=t_samples),
-                    -1) * t
-                ).mean()
+                            lambdann(x=x, t=t_samples),
+                            -1) * t
+                        ).mean()
 
                 tr_loglikelihoods.append(train_loglikelihood.item())
 
@@ -305,6 +309,21 @@ if __name__ == '__main__':
             best_lambdann.eval(), test_dataloader, times, et_tr, et_te,
             args.bs, args.imps, dtype, args.device
         )
+
+        surv = get_survival_curve(
+            best_lambdann.eval(),
+            test_dataloader,
+            all_times,
+            args.imps
+            )
+
+        ev = EvalSurv(
+            surv, 
+            np.asarray([t[1] for t in et_te]), 
+            np.asarray([t[0] for t in et_te]), 
+            censor_surv='km'
+            )
+
         print("\nTest Loglikelihood: {}".format(test_loglikelihood))
         for horizon in enumerate(horizons):
             print(f"For {horizon[1]} quantile,")
@@ -327,6 +346,23 @@ if __name__ == '__main__':
             ][
                 'ROC AUC {} quantile'.format(horizon[1])
             ].append(roc_auc[horizon[0]][0])
+
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Integrated Brier Score'
+        ].append(
+            ev.brier_score(
+                np.linspace(all_times[0], all_times[1], 100)
+                ).mean()
+            )    
+
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Antolini C-Index'
+        ].append(ev.concordance_td('antolini'))
+
         fold_results[
             'Fold: {}'.format(fold)
         ][

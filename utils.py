@@ -7,12 +7,87 @@ Created on Wed Sep 21 23:06:30 2022
 
 import numpy as np
 
+import pandas as pd
 import torch
 from torch.distributions.uniform import Uniform
+from tqdm import tqdm
 
 from sksurv.metrics import (
     concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 )
+
+def build_times(times, slices):
+    times_ = []
+    for i in range(len(times)):
+        if i != 0:
+            t1 = int(times[i-1])
+        else:
+            t1 = 0
+        insert = list(
+            range(t1, int(np.floor(times[i])), slices)
+            )
+        insert.pop(0)
+        times_.append(insert)
+        times_.append([times[i]])
+    times_.insert(0,[0])
+    times_ = [float(item) for sublist in times_ for item in sublist]
+    
+    indexes = [times_.index(q) for q in times]
+    
+    return times_, indexes
+
+def compute_survival(model, x, times, imps, slices=1):
+    """
+    computes the survival curve for one instance using DP returns 1xsurvival time
+    """
+    with torch.no_grad():
+        dtype = model.feature_net[0].weight.dtype
+        quantiles_, indexes = build_times(
+            times, 
+            slices
+            )
+        survival = [
+            torch.ones(x.shape[0], dtype=dtype)
+            ]
+        for i in range(len(quantiles_) - 1):
+            t1 = quantiles_[i]
+            t2 = quantiles_[i+1]
+            importance_sampler = Uniform(t1, t2)
+            t_samples_ = importance_sampler.sample(
+                (x.shape[0], imps//10)
+                ).to(x.device).unsqueeze(-1).type(dtype)
+            int_lambdann = torch.mean(
+                model(
+                x=x,
+                t=t_samples_
+                ), -1) * (t2 - t1)
+            survival.append(
+                torch.exp(survival[-1].log() -  int_lambdann.cpu())
+                )
+        survival = torch.stack(survival, -1)[:,indexes[0]: indexes[1]+1]
+        return survival
+
+def get_survival_curve(model, batcher, times, imps):
+    with torch.no_grad():
+        survival = []
+        for (x, t, e) in tqdm(
+                batcher, total=batcher.dataset.__blen__()
+                ):
+            survival.append(
+                compute_survival(
+                    model, 
+                    x,
+                    times,
+                    imps, 
+                    slices=1,
+                    )
+                )
+        survival = torch.cat(survival).numpy()
+        times_, indexes = build_times(times, slices=1)
+        survival = pd.DataFrame(
+            survival.T, index=times_[indexes[0]:indexes[1]+1]
+            )
+        return survival
 
 def evaluate_model(model, batcher, quantiles, train, valid, 
                    bs, imps, dtype, device):
