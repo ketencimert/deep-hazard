@@ -69,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', default='support', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--epochs', default=4000, type=int)
-    parser.add_argument('--device', default='cuda:2', type=str)
+    parser.add_argument('--device', default='cuda', type=str)
     #Tuned parameters
     parser.add_argument('--batch_size', default=[64, 128, 256, 512, 1024])
     parser.add_argument('--lr', default=[1e-4, 1e-3])
@@ -260,6 +260,16 @@ if __name__ == "__main__":
                 ].append(
                     ev.concordance_td('antolini')
                     )
+
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Integrated NBLL'
+        ].append(
+            ev.integrated_nbll(
+                np.linspace(t.min(), t.max(), 100)
+                ).mean()
+            )    
 
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():

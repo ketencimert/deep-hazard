@@ -95,6 +95,9 @@ if __name__ == '__main__':
 
     for fold in tqdm(range(args.cv_folds)):
 
+        if args.tune:
+            args = tune_deephazard(args, SEED, fold)
+
         PATIENCE = 0
         STOP_REASON = 'END OF EPOCHS'
 
@@ -158,8 +161,6 @@ if __name__ == '__main__':
         D_OUT = 1
         d_hid = d_in // 2 if args.d_hid is None else args.d_hid
 
-        if args.tune:
-            args = tune_deephazard(args, SEED, fold)
 
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
@@ -268,10 +269,9 @@ if __name__ == '__main__':
 
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))
         ax[0][0].plot(epoch_results['LL_train'], color='b', label="LL_train")
-        ax_twin = ax[0][0].twinx()
-        ax_twin.plot(epoch_results['LL_valid'], color='r', label="LL_valid")
-        ax[0][0].legend(loc="center right")
-        ax_twin.legend(loc="lower right")
+        ax[0][0].plot(epoch_results['LL_valid'], color='r', label="LL_valid")
+        ax[0][0].legend()
+        ax[0][0].set_xlabel('Epochs')
         color = ['r', 'g', 'b']
         i = 0
         j = 0
@@ -279,16 +279,20 @@ if __name__ == '__main__':
         for (key, value) in epoch_results.items():
             if 'C-Index' in key:
                 ax[0][1].plot(value, color=color[i], label=key)
-                ax[0][1].legend(loc="center right")
+                ax[0][1].legend()
                 i += 1
             elif 'Brier' in key:
                 ax[1][0].plot(value, color=color[j], label=key)
-                ax[1][0].legend(loc="upper left")
+                ax[1][0].legend()
                 j += 1
             elif 'ROC' in key:
                 ax[1][1].plot(value, color=color[k], label=key)
-                ax[1][1].legend(loc="center right")
+                ax[1][1].legend()
                 k += 1
+        ax[0][1].set_xlabel('Epochs')
+        ax[1][0].set_xlabel('Epochs')
+        ax[1][1].set_xlabel('Epochs')
+        plt.tight_layout()
         os.makedirs('./fold_figures', exist_ok=True)
         plt.savefig("./fold_figures/{}_fold_{}_{}_figs_({}).svg".format(
                 args.dataset,
@@ -371,9 +375,19 @@ if __name__ == '__main__':
         fold_results[
             'Fold: {}'.format(fold)
         ][
+            'Integrated NBLL'
+        ].append(
+            ev.integrated_nbll(
+                np.linspace(all_times[0], all_times[1], 100)
+                ).mean()
+            )
+
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
             'Stop Reason'
         ].append(STOP_REASON)
-
+   
         os.makedirs('./model_checkpoints', exist_ok=True)
         torch.save(
             best_lambdann,

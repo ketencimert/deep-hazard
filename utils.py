@@ -17,23 +17,13 @@ from sksurv.metrics import (
 )
 
 def build_times(times, slices):
-    times_ = []
-    for i in range(len(times)):
-        if i != 0:
-            t1 = int(times[i-1])
-        else:
-            t1 = 0
-        insert = list(
-            range(t1, int(np.floor(times[i])), slices)
-            )
-        insert.pop(0)
-        times_.append(insert)
-        times_.append([times[i]])
-    times_.insert(0,[0])
-    times_ = [float(item) for sublist in times_ for item in sublist]
-
+    times_ = [times[0]]
+    for i in range(int(np.ceil(times[0])), int(np.floor(times[1])), 1):
+        if i != times_[0]:
+            times_.append(i)
+    if times_[-1] != times[1]:
+        times_.append(times[1])
     indexes = [times_.index(q) for q in times]
-
     return times_, indexes
 
 def compute_survival(model, x, times, imps, slices=1):

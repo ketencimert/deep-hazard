@@ -27,7 +27,7 @@ import pandas as pd
 from pycox.evaluation import EvalSurv
 
 from datasets import load_dataset
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -219,6 +219,16 @@ if __name__ == '__main__':
                     ev.concordance_td('antolini')
                     )
 
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Integrated NBLL'
+        ].append(
+            ev.integrated_nbll(
+                np.linspace(t.min(), t.max(), 100)
+                ).mean()
+            )
+                    
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [
