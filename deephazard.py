@@ -140,7 +140,7 @@ if __name__ == '__main__':
             args.bs, args.device, dtype
         )
         test_data = SurvivalData(
-            x_te.values, t_te.values, e_te.values, 
+            x_te.values, t_te.values, e_te.values,
             args.bs, args.device, dtype
         )
 
@@ -323,9 +323,9 @@ if __name__ == '__main__':
             )
 
         ev = EvalSurv(
-            surv, 
-            np.asarray([t[1] for t in et_te]), 
-            np.asarray([t[0] for t in et_te]), 
+            surv,
+            np.asarray([t[1] for t in et_te]),
+            np.asarray([t[0] for t in et_te]),
             censor_surv='km'
             )
 
@@ -360,7 +360,7 @@ if __name__ == '__main__':
             ev.brier_score(
                 np.linspace(all_times[0], all_times[1], 100)
                 ).mean()
-            )    
+            )
 
         fold_results[
             'Fold: {}'.format(fold)

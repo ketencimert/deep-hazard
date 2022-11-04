@@ -129,8 +129,8 @@ if __name__ == "__main__":
 
     params = [
         params[_] for _ in np.random.choice(
-            len(params), 
-            HYPERPARAMETER_SAMPLES, 
+            len(params),
+            HYPERPARAMETER_SAMPLES,
             replace=False
             )
         ]
