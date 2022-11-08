@@ -16,6 +16,8 @@ import torch
 
 from auton_lab.auton_survival import datasets, preprocessing
 
+from simulation_studies.synthetic_data import SyntheticData  
+
 def one_hot_encode(dataframe, column):
     categorical = pd.get_dummies(dataframe[column], prefix=column)
     dataframe = dataframe.drop(column, axis=1)
@@ -149,12 +151,20 @@ def load_dataset(
         num_feats = [key for key in features.keys() if 'numerical' in key]
         num_feats.append('age')
         cat_feats = list(set(features.keys()) - set(num_feats))
-
-    features = preprocessing.Preprocessor().fit_transform(
-        cat_feats=cat_feats,
-        num_feats=num_feats,
-        data=features,
-        )
+    elif dataset.lower() == 'synthetic':
+        features, num_feats = SyntheticData()
+        outcomes = features[['event', 'time']]
+        outcomes = outcomes.rename(
+            columns={'event':'event', 'time':'time'}
+            )
+        features = features.drop(columns=['event', 'time'])
+        cat_feats = []
+    if dataset.lower() != 'synthetic':
+        features = preprocessing.Preprocessor().fit_transform(
+            cat_feats=cat_feats,
+            num_feats=num_feats,
+            data=features,
+            )
 
     outcomes.time = outcomes.time + 1e-15
 

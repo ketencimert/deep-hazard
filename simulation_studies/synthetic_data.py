@@ -4,6 +4,7 @@ Created on Wed Nov  2 17:17:53 2022
 
 @author: Mert
 """
+import numpy as np
 
 import torch
 from torch.distributions.normal import Normal
@@ -14,9 +15,9 @@ from torch.distributions.bernoulli import Bernoulli
 
 import pandas as pd
 
-def SyntheticData(propotional=False):
-    sample_size = 10000
-    p_observed = 1
+def SyntheticData(propotional=True):
+    sample_size = 1000
+    p_observed = 0.3
     
     if propotional:
 
@@ -25,7 +26,7 @@ def SyntheticData(propotional=False):
     
         x = torch.stack([x1, x2], -1)
     
-        g = x1**2 + x2**2
+        g = np.log(5) * torch.exp(-(x1**2 + x2**2) / 2) 
     
         t1 = Exponential(rate=g).sample((1,)).view(-1)
         t2 = Exponential(rate=g).sample((1,)).view(-1)

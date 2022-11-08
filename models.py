@@ -98,7 +98,7 @@ class ExplainableLambdaNN(nn.Module):
 
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
-                 p=0.3, norm=False, dtype=torch.double):
+                 p=0.3, norm=False, noise_t=True, dtype=torch.double):
         super().__init__()
 
         act_fn = {
@@ -121,6 +121,7 @@ class LambdaNN(nn.Module):
             norm = False
 
         self.noise = nn.Dropout(p)
+        self.noise_t = noise_t
 
         self.feature_net = list(
                 chain(
@@ -191,7 +192,7 @@ class LambdaNN(nn.Module):
         x = self.noise(x)
         x = self.feature_net(x)
 
-        if self.training:
+        if self.training and self.noise_t:
 
             t = Normal(loc=t, scale=1).sample()
 

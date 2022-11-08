@@ -29,7 +29,7 @@ def weibull_pdf(x, t):
     return (k/lambda_ * (t / lambda_) ** (k-1) * torch.exp(-(t / lambda_)**k)
             ).view(n,n).detach().cpu().numpy()
 
-n = 300
+n = 500
 
 # import matplotlib.pyplot as plt
 
@@ -62,12 +62,18 @@ pdf = weibull_pdf(xt[:,0], xt[:,1])
 surv = weibull_survival(xt[:,0], xt[:,1])
 haz = weibull_hazard(xt[:,0], xt[:,1])
 xx, tt = np.meshgrid(x, t)
-axs[0,0].contourf(xx, tt, pdf)
+axs[0,0].contourf(xx, tt, pdf, cmap='jet')
 axs[0,0].set_title('PDF')
-axs[0,1].contourf(xx, tt, surv)
+axs[0,0].set_xlabel('covariate x')
+axs[0,0].set_ylabel('time t')
+axs[0,1].contourf(xx, tt, surv, cmap='jet')
 axs[0,1].set_title('Survival')
-axs[1,0].contourf(xx, tt, haz)
+axs[0,1].set_xlabel('covariate x')
+axs[0,1].set_ylabel('time t')
+axs[1,0].contourf(xx, tt, haz, cmap='jet')
 axs[1,0].set_title('Hazard')
+axs[1,0].set_xlabel('covariate x')
+axs[1,0].set_ylabel('time t')
 plt.tight_layout()
 
 # x = torch.linspace(-2, 1, n)
@@ -75,11 +81,11 @@ plt.tight_layout()
 # scale = 1/lambda_
 # k = 1.5 * torch.sigmoid(x+10)
 
-pdfs = []
-for t in torch.linspace(1, 10, n):
-    pdfs.append(
-        Weibull(scale=1/scale, concentration=k).log_prob(t).view(-1).exp().view(-1,1)
-        )
+# pdfs = []
+# for t in torch.linspace(1, 10, n):
+#     pdfs.append(
+#         Weibull(scale=1/scale, concentration=k).log_prob(t).view(-1).exp().view(-1,1)
+#         )
 
 # pdfs = torch.cat(pdfs, -1).numpy()
 # x = np.linspace(-2, 1, n)
@@ -87,28 +93,39 @@ for t in torch.linspace(1, 10, n):
 # tt, xx = np.meshgrid(t, x)
 # h = plt.contourf(xx, tt, pdfs)
 
-best_lambdann.eval()
-n = 300
-x = torch.linspace(-2, 1, n).to(args.device).view(-1,1)
-hazards = []
-for t in torch.linspace(0, 10, n).to(args.device):
-    hazards.append(
-        best_lambdann(x=x,t=torch.ones_like(x)*t).view(-1,1).detach().cpu()
-        )
-hazards = torch.cat(hazards, -1).numpy()
-x = np.linspace(-2, 1, n)
-t = np.linspace(1, 10, n)
-tt, xx = np.meshgrid(t, x)
-h = plt.contourf(xx, tt, hazards)
-
-# # n = 100
-# # k = 0
-# # x1 = np.linspace(-3, 3, n)
-# # x2 = np.linspace(-3, 3, n)
-# # x = torch.cat([torch.tensor(x).view(-1,1) for x in np.meshgrid(x1, x2)], -1).to(args.device)
-# # t = torch.ones_like(x)[:,0]
+# best_lambdann.eval()
+# n = 300
+# x = torch.linspace(-2, 2, n).to(args.device).view(-1,1)
+# hazards = []
+# for t in torch.linspace(0, 10, n).to(args.device):
+#     hazards.append(
+#         best_lambdann(x=x,t=torch.ones_like(x)*t).view(-1,1).detach().cpu()
+#         )
+# hazards = torch.cat(hazards, -1).numpy()
+# x = np.linspace(-2, 2, n)
+# t = np.linspace(1, 10, n)
+# tt, xx = np.meshgrid(t, x)
+# h = plt.contourf(xx, tt, hazards)
 
 
+
+# n = 100
+# k = 0
+# x1 = np.linspace(-5, 5, n)
+# x2 = np.linspace(-5, 5, n)
+# x = torch.cat([torch.tensor(x).view(-1,1) for x in np.meshgrid(x1, x2)], -1).to(args.device).float()
+# t = 0
+# hazard = best_lambdann(
+#     x=x,
+#     t=torch.ones_like(x[:,0])*t).view(-1,1).view(n,n).detach().cpu()
+# x1 = np.linspace(-3, 3, n)
+# x2 = np.linspace(-3, 3, n)
+# xx, yy = np.meshgrid(x1, x2)
+# h = plt.contourf(xx, yy, hazard)
+
+
+
+# h = plt.contourf(xx, yy, hazard)
 
 # # x = np.linspace(-5, 5, 10)
 # # y = np.linspace(-5, 5, 10)

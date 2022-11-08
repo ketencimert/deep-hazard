@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
     parser.add_argument('--patience', default=800, type=float, help='patience')
-    parser.add_argument('--dtype', default='float32', type=str, help='dtype')
+    parser.add_argument('--dtype', default='float64', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
     parser.add_argument('--epochs', default=4000, type=int, help='epochs')
@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--imps', default=512, type=int,
                         help='importance_samples')
     # model, encoder-decoder args
+    parser.add_argument('--noise_t', action='store_true', help='noise_t')
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
     parser.add_argument('--p', default=0.5, type=float, help='dropout')
     parser.add_argument('--d_hid', default=200, type=int, help='d_hid')
@@ -164,7 +165,8 @@ if __name__ == '__main__':
 
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
-            norm=args.norm, activation=args.act, dtype=dtype
+            norm=args.norm, noise_t=args.noise_t, activation=args.act, 
+            dtype=dtype
         ).to(args.device)
 
         optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
