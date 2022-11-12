@@ -129,8 +129,8 @@ if __name__ == "__main__":
 
     params = [
         params[_] for _ in np.random.choice(
-            len(params),
-            HYPERPARAMETER_SAMPLES,
+            len(params), 
+            HYPERPARAMETER_SAMPLES, 
             replace=False
             )
         ]
@@ -277,16 +277,6 @@ if __name__ == "__main__":
                     ev.concordance_td('antolini')
                     )
 
-        fold_results[
-            'Fold: {}'.format(fold)
-        ][
-            'Integrated NBLL'
-        ].append(
-            ev.integrated_nbll(
-                np.linspace(t.min(), t.max(), 100)
-                ).mean()
-            )
-                    
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [

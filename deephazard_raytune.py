@@ -38,7 +38,7 @@ def train(lambdann, optimizer, train_dataloader, importance_samples, device):
         train_loglikelihood = (
                 lambdann(x=x, t=t).log().squeeze(-1) * e
                 - torch.mean(
-            lambdann(x=x, t=t_samples),
+            lambdann(x=x, t=t_samples).view(x.size(0), -1),
             -1) * t
         ).mean()
 
@@ -104,12 +104,10 @@ def train_deephazard(config):
     )
 
     train_data = SurvivalData(
-        x_tr.values, t_tr.values, e_tr.values,
-        config['bs'], device, dtype
+        x_tr.values, t_tr.values, e_tr.values, device, dtype
     )
     valid_data = SurvivalData(
-        x_val.values, t_val.values, e_val.values,
-        config['bs'], device, dtype
+        x_val.values, t_val.values, e_val.values, device, dtype
     )
 
     train_dataloader = DataLoader(
@@ -128,13 +126,14 @@ def train_deephazard(config):
     model = LambdaNN(
         d_in, d_out, d_hid,
         n_layers=config['n_layers'], p=config['p'],
-        norm=config['norm'], activation=config['act'],
-        dtype=dtype
+        norm=config['norm'], activation=config['act']
         ).to(device)
 
     optimizer = optim.Adam(
         model.parameters(), lr=config["lr"], weight_decay=config['wd']
     )
+
+    train_batch_size = train_dataloader.batch_size
 
     for _ in range(config['epochs']):
         epoch_losses = train(
@@ -146,7 +145,9 @@ def train_deephazard(config):
             )
         valid_loglikelihood, cis, brs, roc_auc = evaluate_model(
             model.eval(), valid_dataloader, times,
-            et_tr, et_val, config['bs'], config['imps']
+            et_tr, et_val, config['imps'],
+            train_batch_size, dtype, 
+            device
             )
         epoch_losses['LL_valid'] = valid_loglikelihood
         for horizon in enumerate(horizons):
@@ -163,72 +164,6 @@ def train_deephazard(config):
         # Set this to run Tune.
         tune.report(epoch_losses)
 
-def tune_deephazard(args, seed, fold):
-    config = vars(args)
-    #ARGS TO TUNE:
-    config['lr'] = tune.choice([1e-4, 5e-4, 1e-3, 2e-3])
-    config['wd'] = tune.choice([1e-6, 5e-6, 1e-5, 5e-5, 1e-4])
-    config['bs'] = tune.choice([64, 128, 256, 512])
-    config['imps'] = tune.choice([64, 128, 256, 512, 1024])
-    config['n_layers'] = tune.choice([1, 2, 3, 4])
-    config['p'] = tune.choice([1e-1, 2e-1, 3e-1, 4e-1, 5e-1])
-    config['d_hid'] = tune.choice([50, 100, 200, 300, 400])
-    config['act'] = tune.choice(['relu', 'elu', 'selu', 'silu'])
-    config['norm'] = tune.choice(['layer', None])
-    #SOME ADDITIONAL FOR CONVENIENCE
-    config['seed'] = seed #fixed at main script
-    config['fold'] = fold #current fold running at main script
-
-    config['mode'] = 'max'
-    if 'brier' in args.save_metric.lower():
-        config['mode'] = 'min'
-
-    scheduler = ASHAScheduler(
-            metric='_metric/' + config['save_metric'],  # this is validation loss for me
-            mode=config['mode'],
-            max_t=config['epochs'], # i set this to be relatively high
-            grace_period=10,  # default here is `1`; increasing may help tuning runs
-            reduction_factor=2, # default is `4`; should probably play with this as well
-        )
-
-    searcher = HyperOptSearch(
-        metric='_metric/'+config['save_metric'],
-        mode=config['mode']
-        )
-    reporter = CLIReporter(
-        metric_columns=[config['save_metric'], "training_iteration"]
-        )
-
-    init(num_cpus=0, num_gpus=1)
-
-    result = tune.run(
-        train_deephazard,
-        resources_per_trial={"cpu": 0, "gpu": 1},
-        # resources_per_trial={"cpu": 1, "gpu": 0},
-        config=config,
-        num_samples=100,
-        progress_reporter=reporter,
-        scheduler=scheduler,
-        search_alg=searcher,
-        raise_on_failed_trial=False
-        )
-    config = result.get_best_config(
-        metric='_metric/'+ config['save_metric'],
-        mode=config['mode']
-        )
-
-    args.lr = config['lr']
-    args.wd = config['wd']
-    args.bs = config['bs']
-    args.imps = config['imps']
-    args.n_layers = config['n_layers']
-    args.p = config['p']
-    args.d_hid = config['d_hid']
-    args.act = config['act']
-    args.norm = config['norm']
-
-    return args
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     #ARGS TO CHANGE
@@ -242,10 +177,10 @@ if __name__ == "__main__":
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
     parser.add_argument('--dtype', default='float64', type=str)
-    parser.add_argument('--lr',
+    parser.add_argument('--lr', 
                         default=tune.choice([1e-4, 5e-4, 1e-3, 2e-3])
                         )
-    parser.add_argument('--wd',
+    parser.add_argument('--wd',         
                         default=tune.choice([1e-6, 5e-6, 1e-5, 5e-5, 1e-4])
                         )
     parser.add_argument('--epochs', default=1000, type=int)
@@ -253,7 +188,7 @@ if __name__ == "__main__":
                         default=tune.choice([64, 128, 256, 512])
                         )
     parser.add_argument('--imps',
-                        default=tune.choice([64, 128, 256, 512, 1024])
+                        default=tune.choice([64, 128, 256, 512])
                         )
     # model, encoder-decoder args
     parser.add_argument('--n_layers',
@@ -262,10 +197,10 @@ if __name__ == "__main__":
     parser.add_argument('--p',
                         default=tune.choice([1e-1, 2e-1, 3e-1, 4e-1, 5e-1])
                         )
-    parser.add_argument('--d_hid',
+    parser.add_argument('--d_hid', 
                         default=tune.choice([50, 100, 200, 300, 400])
                         )
-    parser.add_argument('--act',
+    parser.add_argument('--act', 
                         default=tune.choice(['relu', 'elu', 'selu', 'silu'])
                         )
     parser.add_argument('--norm', default='layer')
@@ -304,8 +239,7 @@ if __name__ == "__main__":
         progress_reporter=reporter,
         scheduler=scheduler,
         search_alg=searcher,
-        raise_on_failed_trial=False
-        )
+        raise_on_failed_trial=False)
 
     config = result.get_best_config(
         metric='_metric/'+config['save_metric'],
@@ -320,3 +254,5 @@ if __name__ == "__main__":
                 )
         , 'w') as f:
         json.dump(config, f)
+
+    

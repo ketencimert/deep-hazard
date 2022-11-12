@@ -13,12 +13,10 @@ import numpy as np
 import random
 import torch
 
-import pandas as pd
-from pycox.evaluation import EvalSurv
-
 from sklearn.model_selection import ParameterGrid
 from sksurv.metrics import concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 from tqdm import tqdm
+import pandas as pd
 
 from datasets import load_dataset
 from auton_lab.auton_survival.models.dsm import DeepSurvivalMachines
@@ -26,15 +24,13 @@ from auton_lab.auton_survival.models.cph import DeepCoxPH
 from auton_lab.auton_survival.models.dcm import DeepCoxMixtures
 from auton_lab.auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
-from utils import build_times
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--epochs', default=4000, type=int)
-    parser.add_argument('--model_name', default='cph', type=str)
+    parser.add_argument('--model_name', default='dsm', type=str)
     parser.add_argument('--dataset', default='support', type=str)
 
     args = parser.parse_args()
@@ -42,7 +38,7 @@ if __name__ == '__main__':
     SEED = 12345
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
-    HYPERPARAMETER_SAMPLES = 100
+    HYPERPARAMETER_SAMPLES = 300
 
     outcomes, features = (
         var.astype(np.float64) for var in load_dataset(args.dataset)
@@ -50,8 +46,7 @@ if __name__ == '__main__':
 
     horizons = [0.25, 0.5, 0.75]
     times = np.quantile(outcomes.time[outcomes.event==1], horizons).tolist()
-    all_times = [outcomes.time.min(), outcomes.time.max()]
-    all_times, indexes = build_times(all_times, slices=1)
+
     unique_times = np.unique(outcomes['time'].values)
 
     n = len(features)
@@ -64,36 +59,34 @@ if __name__ == '__main__':
 
     param_grid = {
         'dsm': {
-            'k' : [3, 4, 6],
+            'k' : [1, 2, 3, 4, 6, 8, 10],
             'distribution' : ['LogNormal', 'Weibull'],
             'learning_rate' : [1e-4, 5e-4, 1e-3],
-            'nodes_' : [[48], [64], [96], [256]],
-            'layers_': [1, 2],
-            'discount': [1/3, 3/4, 1],
-            'batch_size': [128, 256],
+            'nodes_' : [[64], [128], [256], [512]],
+            'layers_': [1, 2, 3],
+            'discount': [1/3, 1/2, 3/4, 1]
             },
         'cph': {
-            'nodes_' : [[48], [64], [96], [256]],
-            'layers_': [1, 2, 3],
+            'nodes_' : [[64], [128], [256], [512]],
+            'layers_': [1, 2, 3],            
             },
         'dcm': {
-            'k' : [3, 4, 6],
-            'nodes_' : [[48], [64], [96], [256]],
-            'layers_': [1, 2],
-            'batch_size': [128, 256],
-            'use_activation': [True, False]
+            'k' : [1, 2, 3, 4, 6, 8, 10, 20],
+            'nodes_' : [[64], [128], [256], [512]],
+            'layers_': [1, 2, 3],
+            'batch_size': [128, 256, 512, 1024]
             },
         'cmhe':{
-            'k':[1,2,3],
+            'k':[1,2,3,],
             'g':[1,2,3],
             'a':[],
             },
         }[args.model_name]
 
     params = ParameterGrid(param_grid)
-
+    
     HYPERPARAMETER_SAMPLES = min(HYPERPARAMETER_SAMPLES, len(params))
-
+    
     params = [
         params[_] for _ in np.random.choice(
             len(params),
@@ -144,19 +137,10 @@ if __name__ == '__main__':
                 **param
                 )
 
-            if args.model_name == 'dsm':
-                model_dict[model_] = model_.compute_nll(
-                    x_val.values,
-                    t_val.values,
-                    e_val.values
-                    )
-            elif args.model_name == 'cph':
-                #if cph auton is calculating the val at loss so directly put loss to dict
-                model_dict[model_] = np.mean(loss) # we want it to be small, valcn > valc patience += 1
-            elif args.model_name == 'dcm':
-                model_dict[model_] = np.mean(loss) # we want it to be small, valcn > valc patience += 1
+            model_dict[model_] = np.mean(loss)
 
         model_ = min(model_dict, key=model_dict.get)
+
         try:
             out_risk = model_.predict_risk(x_te.values, times)
             out_risk = np.nan_to_num(out_risk, 1)
@@ -232,46 +216,7 @@ if __name__ == '__main__':
                 ][
                     'ROC AUC {} quantile'.format(horizon[1])
                     ].append(roc_auc[horizon[0]][0])
-        try:
-            out_risk = model_.predict_risk(x_te.values, all_times)
-            out_risk = np.nan_to_num(out_risk, 1)
-            out_survival = 1 - out_risk
-        except:
-            out_survival = model_.predict_survival(x_te.values, all_times)
-            out_survival = np.nan_to_num(out_survival, 0)
-            out_risk = 1 - out_survival
-        surv = pd.DataFrame(
-            out_survival[:,indexes[0]:indexes[1]+1].T,
-            index=all_times[indexes[0]:indexes[1]+1]
-            )
-        ev = EvalSurv(surv, t_te.values, e_te.values, censor_surv='km')
-        fold_results[
-            'Fold: {}'.format(fold)
-            ][
-                'Integrated Brier Score'
-                ].append(
-                    ev.brier_score(np.linspace(t.min(), t.max(), 100)
-                                   ).mean()
-                    )
 
-        fold_results[
-            'Fold: {}'.format(fold)
-            ][
-                'Antolini C-Index'
-                ].append(
-                    ev.concordance_td('antolini')
-                    )
-
-        fold_results[
-            'Fold: {}'.format(fold)
-        ][
-            'Integrated NBLL'
-        ].append(
-            ev.integrated_nbll(
-                np.linspace(t.min(), t.max(), 100)
-                ).mean()
-            )
-                    
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [

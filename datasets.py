@@ -4,7 +4,7 @@ Created on Tue Jun 14 09:47:07 2022
 
 @author: Mert
 """
-import numpy as np
+
 import pandas as pd
 
 from pycox.datasets import flchain
@@ -15,8 +15,6 @@ from pycox.datasets import gbsg
 import torch
 
 from auton_lab.auton_survival import datasets, preprocessing
-
-from simulation_studies.synthetic_data import SyntheticData  
 
 def one_hot_encode(dataframe, column):
     categorical = pd.get_dummies(dataframe[column], prefix=column)
@@ -151,20 +149,12 @@ def load_dataset(
         num_feats = [key for key in features.keys() if 'numerical' in key]
         num_feats.append('age')
         cat_feats = list(set(features.keys()) - set(num_feats))
-    elif dataset.lower() == 'synthetic':
-        features, num_feats = SyntheticData()
-        outcomes = features[['event', 'time']]
-        outcomes = outcomes.rename(
-            columns={'event':'event', 'time':'time'}
-            )
-        features = features.drop(columns=['event', 'time'])
-        cat_feats = []
-    if dataset.lower() != 'synthetic':
-        features = preprocessing.Preprocessor().fit_transform(
-            cat_feats=cat_feats,
-            num_feats=num_feats,
-            data=features,
-            )
+
+    features = preprocessing.Preprocessor().fit_transform(
+        cat_feats=cat_feats,
+        num_feats=num_feats,
+        data=features,
+        )
 
     outcomes.time = outcomes.time + 1e-15
 
@@ -178,8 +168,8 @@ def load_dataset(
     return outcomes, features
 
 class SurvivalData(torch.utils.data.Dataset):
-    def __init__(self, x, t, e, bs, device, dtype=torch.double):
-        self.bs = bs
+    def __init__(self, x, t, e, device, dtype=torch.double):
+
         self.ds = [
             [
                 torch.tensor(x, dtype=dtype),
@@ -218,6 +208,3 @@ class SurvivalData(torch.utils.data.Dataset):
     def input_size(self):
 
         return self.input_size_
-
-    def __blen__(self):
-        return int(np.ceil(self.__len__() / self.bs))

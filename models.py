@@ -98,7 +98,7 @@ class ExplainableLambdaNN(nn.Module):
 
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
-                 p=0.3, norm=False, noise_t=True, dtype=torch.double):
+                 p=0.3, norm=False, dtype=torch.double):
         super().__init__()
 
         act_fn = {
@@ -121,7 +121,6 @@ class LambdaNN(nn.Module):
             norm = False
 
         self.noise = nn.Dropout(p)
-        self.noise_t = noise_t
 
         self.feature_net = list(
                 chain(
@@ -188,11 +187,10 @@ class LambdaNN(nn.Module):
 
     def forward(self, x, t):
 
-        size = x.size(0)
         x = self.noise(x)
         x = self.feature_net(x)
 
-        if self.training and self.noise_t:
+        if self.training:
 
             t = Normal(loc=t, scale=1).sample()
 
@@ -204,7 +202,7 @@ class LambdaNN(nn.Module):
 
         z = self.shared_net(torch.cat([x, t], -1))
 
-        return nn.Softplus()(z).view(size, -1)
+        return nn.Softplus()(z)
 
 class Prior(nn.Module):
     def __init__(self, d_in, mixture_size, d_hid, n_layers, activation="relu",
