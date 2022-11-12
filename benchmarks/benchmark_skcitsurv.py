@@ -15,6 +15,7 @@ import torch
 
 from sksurv.ensemble import RandomSurvivalForest
 from sksurv.ensemble import GradientBoostingSurvivalAnalysis
+from sksurv.linear_model import CoxPHSurvivalAnalysis
 from sksurv.metrics import (
     concordance_index_ipcw,
     brier_score,
@@ -23,16 +24,17 @@ from sksurv.metrics import (
 
 from tqdm import tqdm
 import pandas as pd
+from pycox.evaluation import EvalSurv
 
 from datasets import load_dataset
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
-    parser.add_argument('--model_name', default='gradientboosting', type=str)
-    parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--model_name', default='coxph', type=str)
+    parser.add_argument('--dataset', default='flchain', type=str)
     args = parser.parse_args()
 
     SEED = 12345
@@ -57,23 +59,29 @@ if __name__ == '__main__':
 
     param_grid = {
         'survivalforest':
-        {
-            'n_estimators' : [100, 200, 300],
-            'min_samples_split' : [2, 4, 8, 10],
-            'min_samples_leaf' : [2, 4, 8, 10],
-            },
-        'gradientboosting':{
-            'loss':['coxph'],
-            'n_estimators' : [100, 400, 600],
-            'min_samples_split' : [2, 4, 8, 10],
-            'learning_rate':[1e-3, 1e-2, 1e-1],
-            }
+            {
+                'n_estimators' : [100, 200, 300],
+                'min_samples_split' : [2, 4, 8, 10],
+                'min_samples_leaf' : [2, 4, 8, 10],
+                },
+        'gradientboosting':
+            {
+                'loss':['coxph'],
+                'n_estimators' : [100, 400, 600],
+                'min_samples_split' : [2, 4, 8, 10],
+                'learning_rate':[1e-3, 1e-2, 1e-1],
+                },
+        'coxph':
+            {
+                'alpha':[0, 1e-3, 1e-2, 1e-1]
+                }
         }[args.model_name]
 
     class Model(
             {
                 'survivalforest':RandomSurvivalForest,
                 'gradientboosting':GradientBoostingSurvivalAnalysis,
+                'coxph':CoxPHSurvivalAnalysis
                 }[args.model_name]
             ):
         "To make sure same validation set is seen by all models."
@@ -121,6 +129,14 @@ if __name__ == '__main__':
 
         surv = model.predict_survival_function(x_test, return_array=True)
         event_times = model.event_times_
+
+        ev = EvalSurv(
+            pd.DataFrame(surv.T, index=event_times),
+            np.asarray([t[1] for t in et_test]),
+            np.asarray([t[0] for t in et_test]),
+            censor_surv='km'
+            )
+
         survival = []
         for time in reversed(times):
             loc = min(
@@ -186,6 +202,33 @@ if __name__ == '__main__':
                     'ROC AUC {} quantile'.format(horizon[1])
                     ].append(roc_auc[horizon[0]][0])
 
+        fold_results[
+            'Fold: {}'.format(fold)
+            ][
+                'Integrated Brier Score'
+                ].append(
+                    ev.brier_score(np.linspace(t.min(), t.max(), 100)
+                                   ).mean()
+                    )
+
+        fold_results[
+            'Fold: {}'.format(fold)
+            ][
+                'Antolini C-Index'
+                ].append(
+                    ev.concordance_td('antolini')
+                    )
+
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Integrated NBLL'
+        ].append(
+            ev.integrated_nbll(
+                np.linspace(t.min(), t.max(), 100)
+                ).mean()
+            )
+                    
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [

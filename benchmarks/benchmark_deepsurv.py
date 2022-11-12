@@ -15,7 +15,7 @@ import random
 import numpy as np
 import pandas as pd
 
-from pycox.models import CoxTime
+from pycox.models import CoxPH
 from pycox.models.cox_time import MLPVanillaCoxTime
 from pycox.evaluation import EvalSurv
 
@@ -34,17 +34,17 @@ def train_model(nodes, layers, batch_norm, dropout, lr, wd,
                 batch_size, **extras
                 ):
 
-    net = MLPVanillaCoxTime(
+    net = tt.practical.MLPVanilla(
         d,
-        [[nodes]*layers],
+        [nodes]*layers,
+        1,
         batch_norm,
         dropout,
         ).to(args.device)
 
-    model = CoxTime(
+    model = CoxPH(
         net,
         tt.optim.Adam,
-        labtrans=labtrans
         )
 
     model.optimizer.set_lr(lr)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', default='support', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--epochs', default=4000, type=int)
-    parser.add_argument('--device', default='cpu', type=str)
+    parser.add_argument('--device', default='cuda', type=str)
     #Tuned parameters
     parser.add_argument('--batch_size', default=[64, 128, 256, 512, 1024])
     parser.add_argument('--lr', default=[1e-4, 1e-3])
@@ -80,18 +80,15 @@ if __name__ == "__main__":
     parser.add_argument('--dropout', default=[
         0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7
         ])
-    parser.add_argument('--lambda', default=[0.1, 0.01, 0.001, 0])
-    parser.add_argument('--log_duration', default=[True, False])
     args = parser.parse_args()
 
     SEED = 12345
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
     HYPERPARAMETER_SAMPLES = 300
-    MODEL_NAME = 'cox_time'
+    MODEL_NAME = 'deepsurv'
 
     fold_results = defaultdict(lambda: defaultdict(list))
-
     #1.LOAD DATASET
     outcomes, features = load_dataset(args.dataset)
 
@@ -144,17 +141,11 @@ if __name__ == "__main__":
 
         for param in tqdm(params, total=len(params)):
 
-            labtrans = CoxTime.label_transform(
-                log_duration=param['log_duration']
-                )
-            y_train = labtrans.fit_transform(t_train, e_train)
-            y_val = labtrans.transform(t_val, e_val)
-
-            train = (x_train, y_train)
+            y_train = (t_train, e_train)
+            y_val = (t_val, e_val)
             val = (x_val, y_val)
 
             in_features = x_train.shape[1]
-            out_features = labtrans.out_features
 
             #2.DEFINE MODEL
             model = train_model(**param)
@@ -278,8 +269,8 @@ if __name__ == "__main__":
             ev.integrated_nbll(
                 np.linspace(t.min(), t.max(), 100)
                 ).mean()
-            )
-                    
+            )    
+
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [
