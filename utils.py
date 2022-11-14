@@ -4,6 +4,7 @@ Created on Wed Sep 21 23:06:30 2022
 
 @author: Mert
 """
+import pandas as pd
 
 import numpy as np
 
@@ -13,6 +14,125 @@ from torch.distributions.uniform import Uniform
 from sksurv.metrics import (
     concordance_index_ipcw, brier_score, cumulative_dynamic_auc
 )
+
+from tqdm import tqdm
+
+def build_times(times, slices):
+    times_ = [times[0]]
+    for i, j in enumerate(
+            np.linspace(
+                int(np.ceil(times[0])),
+                int(np.floor(times[1])), 
+                int(
+                    (int(np.floor(times[1])) - int(np.ceil(times[0])))/slices
+                    )
+                )
+            ):
+        if j != times_[0]:
+            times_.append(j)
+    if times_[-1] != times[1]:
+        times_.append(times[1])
+    indexes = [times_.index(q) for q in times]
+    return times_, indexes
+
+def compute_survival(model, x, times, imps, slices=1):
+    """
+    computes the survival curve for one instance using DP returns 1xsurvival time
+    """
+    with torch.no_grad():
+        dtype = model.feature_net[0].weight.dtype
+        quantiles_, indexes = build_times(
+            times,
+            slices
+            )
+        survival = [
+            torch.ones(x.shape[0], dtype=dtype)
+            ]
+        for i in range(len(quantiles_) - 1):
+            t1 = quantiles_[i]
+            t2 = quantiles_[i+1]
+            importance_sampler = Uniform(t1, t2)
+            t_samples_ = importance_sampler.sample(
+                (x.shape[0], imps//10)
+                ).to(x.device).unsqueeze(-1).type(dtype)
+            int_lambdann = torch.mean(
+                model(
+                x=x,
+                t=t_samples_
+                ).view(x.size(0), -1), -1) * (t2 - t1)
+            survival.append(
+                torch.exp(survival[-1].log() -  int_lambdann.cpu())
+                )
+        survival = torch.stack(survival, -1)[:,indexes[0]: indexes[1]+1]
+        return survival
+
+def compute_hazard(model, x, times, imps, slices=1):
+    """
+    computes the survival curve for one instance using DP returns 1xsurvival time
+    """
+    dtype = model.feature_net[0].weight.dtype
+    device = model.feature_net[0].weight.device
+    with torch.no_grad():
+        quantiles_, indexes = build_times(
+            times,
+            slices
+            )
+        hazard = []
+        for i in range(len(quantiles_)):
+            t = torch.tensor(quantiles_[i], dtype=dtype, device=device)
+            lambda_ = model(
+                x=x,
+                t=t.view(-1,1).repeat_interleave(x.size(0), 0)
+                ).view(x.size(0))
+            hazard.append(
+                lambda_
+                )
+        hazard = torch.stack(hazard, -1)[:,indexes[0]: indexes[1]+1]
+        return hazard
+
+def get_survival_curve(model, batcher, times, imps):
+    with torch.no_grad():
+        survival = []
+        for (x, t, e) in tqdm(
+                batcher, total=1024
+                ):
+            survival.append(
+                compute_survival(
+                    model,
+                    x,
+                    times,
+                    imps,
+                    slices=1,
+                    )
+                )
+        survival = torch.cat(survival).numpy()
+        times_, indexes = build_times(times, slices=1)
+        survival = pd.DataFrame(
+            survival.T, index=times_[indexes[0]:indexes[1]+1]
+            )
+        return survival
+
+def get_hazard_curve(model, batcher, times, imps, slices=1):
+    with torch.no_grad():
+        hazard = []
+        for (x, t, e) in tqdm(
+                batcher, total=1024
+                ):
+            hazard.append(
+                compute_hazard(
+                    model,
+                    x,
+                    times,
+                    imps,
+                    slices=slices,
+                    )
+                )
+        hazard = torch.cat(hazard).numpy()
+        times_, indexes = build_times(times, slices=slices)
+        hazard = pd.DataFrame(
+            hazard.T, index=times_[indexes[0]:indexes[1]+1]
+            )
+        return hazard
 
 def evaluate_model(model, batcher, quantiles, train, valid, 
                    bs, imps, dtype, device):

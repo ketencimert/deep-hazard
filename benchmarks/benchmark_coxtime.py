@@ -51,7 +51,7 @@ def train_model(nodes, layers, batch_norm, dropout, lr, wd,
     model.optimizer.param_groups[0]['weight_decay'] = wd
 
     callbacks = [tt.callbacks.EarlyStopping()]
-    _ = model.fit(
+    logs = model.fit(
         x_train,
         y_train,
         batch_size,
@@ -61,7 +61,7 @@ def train_model(nodes, layers, batch_norm, dropout, lr, wd,
         verbose=False,
         )
 
-    return model
+    return model, logs
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     SEED = 12345
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
-    HYPERPARAMETER_SAMPLES = 300
+    HYPERPARAMETER_SAMPLES = 100
     MODEL_NAME = 'cox_time'
 
     fold_results = defaultdict(lambda: defaultdict(list))
@@ -157,19 +157,21 @@ if __name__ == "__main__":
             out_features = labtrans.out_features
 
             #2.DEFINE MODEL
-            model = train_model(**param)
-            model.compute_baseline_hazards()
-            surv = model.predict_surv_df(x_val)
-            ev = EvalSurv(surv, t_val, e_val, censor_surv='km')
-            param_dict[str(param)] = ev.concordance_td('antolini')
+            model, logs = train_model(**param)
+            val_loss = min(logs._monitors['val_'].scores['loss']['score'])
+            # model.compute_baseline_hazards()
+            # surv = model.predict_surv_df(x_val)
+            # ev = EvalSurv(surv, t_val, e_val, censor_surv='km')
+            # param_dict[str(param)] = ev.concordance_td('antolini')
+            param_dict[str(param)] = val_loss
 
         best_config = ast.literal_eval(
-            max(
+            min(
                 param_dict.items(), key=operator.itemgetter(1)
                 )[0]
             )
 
-        model = train_model(**best_config)
+        model = train_model(**best_config)[0]
         model.compute_baseline_hazards()
         surv = model.predict_surv_df(x_test)
         survival = []
