@@ -19,8 +19,8 @@ from pycox.models import CoxTime
 from pycox.models.cox_time import MLPVanillaCoxTime
 from pycox.evaluation import EvalSurv
 
-import torch # For building the networks
-import torchtuples as tt # Some useful functions
+import torch  # For building the networks
+import torchtuples as tt  # Some useful functions
 from tqdm import tqdm
 
 from sklearn.model_selection import ParameterGrid
@@ -30,27 +30,27 @@ from sksurv.metrics import (
 
 from datasets import load_dataset
 
+
 def train_model(nodes, layers, batch_norm, dropout, lr, wd,
                 batch_size, **extras
                 ):
-
     net = MLPVanillaCoxTime(
         d,
-        [[nodes]*layers],
+        [[nodes] * layers],
         batch_norm,
         dropout,
-        ).to(args.device)
+    ).to(args.device)
 
     model = CoxTime(
         net,
         tt.optim.Adam,
         labtrans=labtrans
-        )
+    )
 
     model.optimizer.set_lr(lr)
     model.optimizer.param_groups[0]['weight_decay'] = wd
 
-    callbacks = [tt.callbacks.EarlyStopping()]
+    callbacks = [tt.callbacks.EarlyStopping(patience=20)]
     logs = model.fit(
         x_train,
         y_train,
@@ -59,40 +59,41 @@ def train_model(nodes, layers, batch_norm, dropout, lr, wd,
         callbacks,
         val_data=val,
         verbose=False,
-        )
+    )
 
     return model, logs
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    #Fixed parameters
+    # Fixed parameters
     parser.add_argument('--dataset', default='support', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--epochs', default=4000, type=int)
-    parser.add_argument('--device', default='cpu', type=str)
-    #Tuned parameters
-    parser.add_argument('--batch_size', default=[64, 128, 256, 512, 1024])
-    parser.add_argument('--lr', default=[1e-4, 1e-3])
-    parser.add_argument('--wd', default=[0.4, 0.2, 0.1, 0.05, 0.02, 0.01, 0])
-    parser.add_argument('--batch_norm', default=[True, False])
-    parser.add_argument('--layers', default=[1,2,3])
-    parser.add_argument('--nodes', default=[64, 128, 256, 512])
+    parser.add_argument('--device', default='cuda', type=str)
+    # Tuned parameters
+    parser.add_argument('--batch_size', default=[512, 1024])
+    parser.add_argument('--lr', default=[5e-4, 1e-3])
+    parser.add_argument('--wd', default=[0, 1e-8, 1e-6])
+    parser.add_argument('--batch_norm', default=[True])
+    parser.add_argument('--layers', default=[1, 2])
+    parser.add_argument('--nodes', default=[256, 512])
     parser.add_argument('--dropout', default=[
-        0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7
-        ])
-    parser.add_argument('--lambda', default=[0.1, 0.01, 0.001, 0])
+        0, 0.2, 0.4, 0.5
+    ])
+    parser.add_argument('--lambda', default=[0, 0.001, 0.01, 0.1])
     parser.add_argument('--log_duration', default=[True, False])
+    parser.add_argument('--seed', default=12345, type=int)
     args = parser.parse_args()
-
-    SEED = 12345
+    SEED = args.seed
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
-    HYPERPARAMETER_SAMPLES = 100
+    HYPERPARAMETER_SAMPLES = 200
     MODEL_NAME = 'cox_time'
 
     fold_results = defaultdict(lambda: defaultdict(list))
 
-    #1.LOAD DATASET
+    # 1.LOAD DATASET
     outcomes, features = load_dataset(args.dataset)
 
     x, t, e = features, outcomes.time, outcomes.event
@@ -109,22 +110,23 @@ if __name__ == "__main__":
 
     params = ParameterGrid(
         {
-            key:item for key,item in vars(args).items() if key not in [
-                'dataset',
-                'cv_folds',
-                'epochs',
-                'device'
-                ]
-            }
-        )
+            key: item for key, item in vars(args).items() if key not in [
+            'dataset',
+            'cv_folds',
+            'epochs',
+            'device',
+            'seed'
+        ]
+        }
+    )
 
     params = [
         params[_] for _ in np.random.choice(
-            len(params), 
-            HYPERPARAMETER_SAMPLES, 
+            len(params),
+            min(len(params), HYPERPARAMETER_SAMPLES),
             replace=False
-            )
-        ]
+        )
+    ]
 
     for fold in tqdm(range(args.cv_folds)):
 
@@ -136,17 +138,16 @@ if __name__ == "__main__":
         t_train, t_val = t[:train_size], t[train_size:]
         e_train, e_val = e[:train_size], e[train_size:]
 
-        x_test = features[folds==fold].values.astype(np.float32)
-        t_test = outcomes.time[folds==fold].values
-        e_test = outcomes.event[folds==fold].values
+        x_test = features[folds == fold].values.astype(np.float32)
+        t_test = outcomes.time[folds == fold].values
+        e_test = outcomes.event[folds == fold].values
 
         param_dict = dict()
 
         for param in tqdm(params, total=len(params)):
-
             labtrans = CoxTime.label_transform(
                 log_duration=param['log_duration']
-                )
+            )
             y_train = labtrans.fit_transform(t_train, e_train)
             y_val = labtrans.transform(t_val, e_val)
 
@@ -156,7 +157,7 @@ if __name__ == "__main__":
             in_features = x_train.shape[1]
             out_features = labtrans.out_features
 
-            #2.DEFINE MODEL
+            # 2.DEFINE MODEL
             model, logs = train_model(**param)
             val_loss = min(logs._monitors['val_'].scores['loss']['score'])
             # model.compute_baseline_hazards()
@@ -168,22 +169,22 @@ if __name__ == "__main__":
         best_config = ast.literal_eval(
             min(
                 param_dict.items(), key=operator.itemgetter(1)
-                )[0]
-            )
+            )[0]
+        )
 
         model = train_model(**best_config)[0]
         model.compute_baseline_hazards()
         surv = model.predict_surv_df(x_test)
         survival = []
         list_lookup = surv.index.tolist()
-        for time in reversed(times):
+        for time in times:
             loc = min(
                 range(len(list_lookup)),
-                key=lambda i: abs(list_lookup[i]-time)
-                )
-            survival.append(surv.values[loc,:].reshape(-1,1))
+                key=lambda i: abs(list_lookup[i] - time)
+            )
+            survival.append(surv.values[loc, :].reshape(-1, 1))
 
-        survival = np.concatenate(survival,-1)
+        survival = np.concatenate(survival, -1)
         risk = 1 - survival
 
         et_train = np.array(
@@ -240,37 +241,37 @@ if __name__ == "__main__":
 
             fold_results[
                 'Fold: {}'.format(fold)
-                ][
-                    'C-Index {} quantile'.format(horizon[1])
-                    ].append(cis[horizon[0]])
+            ][
+                'C-Index {} quantile'.format(horizon[1])
+            ].append(cis[horizon[0]])
             fold_results[
                 'Fold: {}'.format(fold)
-                ][
-                    'Brier Score {} quantile'.format(horizon[1])
-                    ].append(brs[0][horizon[0]])
+            ][
+                'Brier Score {} quantile'.format(horizon[1])
+            ].append(brs[0][horizon[0]])
             fold_results[
                 'Fold: {}'.format(fold)
-                ][
-                    'ROC AUC {} quantile'.format(horizon[1])
-                    ].append(roc_auc[horizon[0]][0])
+            ][
+                'ROC AUC {} quantile'.format(horizon[1])
+            ].append(roc_auc[horizon[0]][0])
 
         ev = EvalSurv(surv, t_test, e_test, censor_surv='km')
         fold_results[
             'Fold: {}'.format(fold)
-            ][
-                'Integrated Brier Score'
-                ].append(
-                    ev.brier_score(np.linspace(t.min(), t.max(), 100)
-                                   ).mean()
-                    )
+        ][
+            'Integrated Brier Score'
+        ].append(
+            ev.brier_score(np.linspace(t.min(), t.max(), 100)
+                           ).mean()
+        )
 
         fold_results[
             'Fold: {}'.format(fold)
-            ][
-                'Antolini C-Index'
-                ].append(
-                    ev.concordance_td('antolini')
-                    )
+        ][
+            'Antolini C-Index'
+        ].append(
+            ev.concordance_td('antolini')
+        )
 
         fold_results[
             'Fold: {}'.format(fold)
@@ -279,19 +280,20 @@ if __name__ == "__main__":
         ].append(
             ev.integrated_nbll(
                 np.linspace(t.min(), t.max(), 100)
-                ).mean()
-            )
-                    
+            ).mean()
+        )
+
     fold_results = pd.DataFrame(fold_results)
     for key in fold_results.keys():
         fold_results[key] = [
             _[0] for _ in fold_results[key]
-            ]
+        ]
 
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results/fold_results_{}_{}.csv'.format(
+        './fold_results/fold_results_{}_{}_seed_{}.csv'.format(
             args.dataset,
-            MODEL_NAME
-            )
+            MODEL_NAME,
+            SEED
         )
+    )

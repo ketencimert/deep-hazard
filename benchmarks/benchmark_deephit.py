@@ -53,7 +53,7 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
     model.optimizer.set_lr(lr)
     model.optimizer.param_groups[0]['weight_decay'] = wd
 
-    callbacks = [tt.callbacks.EarlyStopping()]
+    callbacks = [tt.callbacks.EarlyStopping(patience=50)]
     logs = model.fit(
         x_train,
         y_train,
@@ -68,35 +68,36 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    #Fixed parameters
-    parser.add_argument('--dataset', default='support', type=str)
+    # Fixed parameters
+    parser.add_argument('--dataset', default='metabric', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--epochs', default=4000, type=int)
-    parser.add_argument('--device', default='cpu', type=str)
-    #Tuned parameters
-    parser.add_argument('--batch_size', default=[64, 128, 256, 512, 1024])
-    parser.add_argument('--lr', default=[1e-4, 1e-3])
-    parser.add_argument('--wd', default=[0.4, 0.2, 0.1, 0.05, 0.02, 0.01, 0])
+    parser.add_argument('--device', default='cuda', type=str)
+    # Tuned parameters
+    parser.add_argument('--batch_size', default=[512, 1024])
+    parser.add_argument('--lr', default=[5e-4, 1e-3])
+    parser.add_argument('--wd', default=[0, 1e-8, 1e-6, 1e-3, 1e-1])
     parser.add_argument('--batch_norm', default=[True])
-    parser.add_argument('--layers', default=[1,2,3])
-    parser.add_argument('--nodes', default=[64, 128, 256, 512])
+    parser.add_argument('--layers', default=[1, 2])
+    parser.add_argument('--nodes', default=[256, 512])
     parser.add_argument('--dropout', default=[
-        0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7
-        ])
+        0, 0.1, 0.4, 0.5
+    ])
     parser.add_argument('--alpha', default=[
-        0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1
-        ])
+        0.1, 0.2, 0.4, 0.8, 1
+    ])
     parser.add_argument('--sigma', default=[
-        0.1, 0.25, 0.5, 1, 2.5, 5, 10, 100
-        ])
-    parser.add_argument('--num_durations', default=[50, 100, 200, 400])
+        0.1, 0.25, 0.4, 0.8, 1, 2, 10
+    ])
+    parser.add_argument('--num_durations', default=[5, 10, 50, 100])
+    parser.add_argument('--seed', default=1, type=int)
     args = parser.parse_args()
 
-    SEED = 12345
+    SEED = args.seed
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
-    INTERPOLATE = 2000
-    HYPERPARAMETER_SAMPLES = 100
+    INTERPOLATE = 100
+    HYPERPARAMETER_SAMPLES = 300
     MODEL_NAME = 'deephit'
 
     fold_results = defaultdict(lambda: defaultdict(list))
@@ -122,7 +123,8 @@ if __name__ == "__main__":
                 'dataset',
                 'cv_folds',
                 'epochs',
-                'device'
+                'device',
+                'seed'
                 ]
             }
         )
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     params = [
         params[_] for _ in np.random.choice(
             len(params),
-            HYPERPARAMETER_SAMPLES,
+            min(HYPERPARAMETER_SAMPLES, len(params)),
             replace=False
             )
         ]
@@ -182,7 +184,7 @@ if __name__ == "__main__":
         surv = model.interpolate(INTERPOLATE).predict_surv_df(x_test)
         survival = []
         list_lookup = surv.index.tolist()
-        for time in reversed(times):
+        for time in times:
             loc = min(
                 range(len(list_lookup)),
                 key=lambda i: abs(list_lookup[i]-time)
@@ -296,8 +298,9 @@ if __name__ == "__main__":
 
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results/fold_results_{}_{}.csv'.format(
+        './fold_results/fold_results_{}_{}_seed_{}.csv'.format(
             args.dataset,
-            MODEL_NAME
+            MODEL_NAME,
+            SEED
             )
         )

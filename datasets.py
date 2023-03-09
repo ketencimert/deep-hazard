@@ -111,6 +111,16 @@ def load_dataset(
         features = pd.DataFrame(features)
         cat_feats = []
         num_feats = [key for key in features.keys() if key not in cat_feats]
+    
+    elif dataset.lower() == 'framingham':
+        features, t, e = datasets.load_dataset('FRAMINGHAM')
+        features = pd.DataFrame(features)
+        outcomes = pd.DataFrame([t,e]).T
+        outcomes = outcomes.rename(columns={0:'time',1:'event'})
+
+        features = pd.DataFrame(features)
+        cat_feats = []
+        num_feats = [key for key in features.keys() if key not in cat_feats]
 
     elif dataset.lower() == 'aki/ckd':
 

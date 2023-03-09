@@ -14,7 +14,6 @@ import random
 import torch
 
 from sksurv.ensemble import RandomSurvivalForest
-from sksurv.ensemble import GradientBoostingSurvivalAnalysis
 from sksurv.linear_model import CoxPHSurvivalAnalysis
 from sksurv.metrics import (
     concordance_index_ipcw,
@@ -27,20 +26,22 @@ import pandas as pd
 from pycox.evaluation import EvalSurv
 
 from datasets import load_dataset
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import PredefinedSplit
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--model_name', default='coxph', type=str)
-    parser.add_argument('--dataset', default='flchain', type=str)
+    parser.add_argument('--dataset', default='metabric', type=str)
+    parser.add_argument('--seed', default=12345, type=int)
     args = parser.parse_args()
 
-    SEED = 12345
+    SEED = args.seed
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
-    HYPERPARAMETER_SAMPLES = 20
+    HYPERPARAMETER_SAMPLES = 100
 
     outcomes, features = load_dataset(args.dataset)
 
@@ -60,36 +61,26 @@ if __name__ == '__main__':
     param_grid = {
         'survivalforest':
             {
-                'n_estimators' : [100, 200, 300],
-                'min_samples_split' : [2, 4, 8, 10],
-                'min_samples_leaf' : [2, 4, 8, 10],
-                },
-        'gradientboosting':
-            {
-                'loss':['coxph'],
-                'n_estimators' : [100, 400, 600],
-                'min_samples_split' : [2, 4, 8, 10],
-                'learning_rate':[1e-3, 1e-2, 1e-1],
-                },
+                'max_depth': [None, 5],
+                'n_estimators': [50, 100, 200],
+                'max_features': [
+                    int(features.shape[-1] ** (0.5)),
+                    features.shape[-1] // 2,
+                    features.shape[-1]
+                ],
+                'min_samples_split': [2, 10, 100, 200],
+                'n_jobs': [-1]
+            },
         'coxph':
             {
-                'alpha':[0, 1e-3, 1e-2, 1e-1]
-                }
-        }[args.model_name]
+                'alpha': [0, 1e-3, 1e-2, 1e-1]
+            }
+    }[args.model_name]
 
-    class Model(
-            {
-                'survivalforest':RandomSurvivalForest,
-                'gradientboosting':GradientBoostingSurvivalAnalysis,
-                'coxph':CoxPHSurvivalAnalysis
-                }[args.model_name]
-            ):
-        "To make sure same validation set is seen by all models."
-        def fit(self, X, y, sample_weight=None, validation_data=None):
-            self.fit__validation_data = validation_data
-            super().fit(X, y)
-            vars(self).pop('fit__validation_data')
-            return self
+    model_choice = {
+        'survivalforest':RandomSurvivalForest,
+        'coxph':CoxPHSurvivalAnalysis
+        }[args.model_name]
 
     for fold in tqdm(range(args.cv_folds)):
 
@@ -114,18 +105,27 @@ if __name__ == '__main__':
         et_val = np.array(
             [(e_val.values[i], t_val.values[i]) for i in range(len(e_val))],
                           dtype = [('e', bool), ('t', float)])
-
-        model_ = Model()
-        model_ = RandomizedSearchCV(
-            estimator=model_,
-            param_distributions=param_grid,
-            n_iter=HYPERPARAMETER_SAMPLES
+        
+        x_train_val = np.concatenate([x_train, x_val], 0)
+        et_train_val = np.concatenate([et_train, et_val], 0)
+        
+        split_index = np.concatenate(
+            [-np.ones_like(x_train)[:,0],
+             np.zeros_like(x_val)[:,0]]
             )
-        model_.fit(x_train, et_train, validation_data=et_val)
+
+        model_ = GridSearchCV(
+            estimator=model_choice(),
+            param_grid=param_grid,
+            cv=PredefinedSplit(split_index),
+            n_jobs=-1
+            )
+        
+        model_.fit(x_train_val, et_train_val)
         best_estimator = model_.best_estimator_.get_params()
 
-        model = Model(**best_estimator)
-        model.fit(x_train, et_train, validation_data=et_val)
+        model = model_choice(**best_estimator)
+        model.fit(x_train, et_train)
 
         surv = model.predict_survival_function(x_test, return_array=True)
         event_times = model.event_times_
@@ -138,7 +138,7 @@ if __name__ == '__main__':
             )
 
         survival = []
-        for time in reversed(times):
+        for time in times:
             loc = min(
                 range(len(event_times)),
                 key=lambda i: abs(event_times[i]-time)
@@ -237,8 +237,9 @@ if __name__ == '__main__':
 
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results/fold_results_{}_{}.csv'.format(
+        './fold_results/fold_results_{}_{}_seed_{}.csv'.format(
             args.dataset,
             args.model_name,
+            SEED
             )
         )

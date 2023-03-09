@@ -4,6 +4,7 @@ Created on Tue May 24 21:56:58 2022
 
 @author: Mert
 """
+import random
 import os
 from collections import defaultdict
 import numpy as np
@@ -18,6 +19,11 @@ from torch.utils.data import DataLoader
 from utils import get_survival_curve, get_hazard_curve
 from datasets import SurvivalData, load_dataset
 
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "Helvetica"
+})
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -26,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('--bs', default=1024, type=str)
 
     parser.add_argument('--dtype', default='float64', type=str)
-    parser.add_argument('--dataset', default='pbc', type=str)
+    parser.add_argument('--dataset', default='metabric', type=str)
     parser.add_argument('--importance_samples', default=256, type=int)
     parser.add_argument('--sample', default=6001, type=int)
     args = parser.parse_args()
@@ -36,6 +42,8 @@ if __name__ == '__main__':
         'float64': torch.double,
         'float32': torch.float,
     }[args.dtype]
+    SEED = 12345
+    random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
     x, t, e = features, outcomes.time, outcomes.event
     n = len(features)
     tr_size = int(n * 0.7)
@@ -49,7 +57,8 @@ if __name__ == '__main__':
     fold_results = defaultdict(lambda: defaultdict(list))
 
     lambdann = torch.load(
-        './model_checkpoint/a.pth'
+        './model_checkpoint/{}.pth'.format(args.dataset),
+        map_location='cuda:0'
         ).to(args.device)
     fold = 1
     x = features[folds != fold]
@@ -92,7 +101,7 @@ if __name__ == '__main__':
         x_val.values, t_val.values, e_val.values, args.device, dtype
     )
     test_data = SurvivalData(
-        x_te.values, t_te.values, e_te.values, args.device, dtype
+        x_te.values[:300], t_te.values[:300], e_te.values[:300], args.device, dtype
     )
 
     train_dataloader = DataLoader(
@@ -107,13 +116,13 @@ if __name__ == '__main__':
     hazards = get_hazard_curve(
         lambdann, 
         test_dataloader, 
-        [0, t.max()+10], 
-        100,
+        [0, t.max()], 
+        20,
         slices=0.05
         )
-    patient1 = 0
-    patient2 = 55
-    patient3 = 20
+    patient1 = 173
+    patient2 = 263
+    patient3 = 246
     size = 15
     x = hazards.index
     y1 = hazards.values.T[patient1]
@@ -125,18 +134,19 @@ if __name__ == '__main__':
     c3 = 'green'
     
     ax = plt.subplot(111)
-    ax.plot(x, y1, lw=2, color=c1, linestyle='dashed', label = 'Patient 1')
-    ax.plot(x, y2, lw=2, color=c2, linestyle='dashed', label = 'Patient 2')
-    ax.plot(x, y3, lw=2, color=c3, linestyle='dashed', label = 'Patient 3')
-    ax.legend(prop={'size': size})
+    ax.plot(x, y1, lw=2, color=c1, linestyle='dashed', label = 'Instance 1')
+    ax.plot(x, y2, lw=2, color=c2, linestyle='dashed', label = 'Instance 2')
+    ax.plot(x, y3, lw=2, color=c3, linestyle='dashed', label = 'Instance 3')
+    ax.legend(prop={'size': size}, loc='upper right')
     ax.fill_between(x, 0, y1, alpha=0.03, color=c1)
     ax.fill_between(x, 0, y2, alpha=0.03, color=c2)
     ax.fill_between(x, 0, y3, alpha=0.03, color=c3)
-    
+    ax.set_xlabel('Time',size=25)
+    ax.set_ylabel('Hazard Rate',size=25, labelpad=10)
     # majorLocator = MultipleLocator(1)
     # ax.xaxis.set_major_locator(majorLocator)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    # ax.spines['top'].set_visible(False)
+    # ax.spines['right'].set_visible(False)
     # ax.set_ylabel('Hazard Rate', fontsize=size)
     # ax.set_xlabel('Time', fontsize=size)
     ax.tick_params(axis='both', which='major', labelsize=size)
