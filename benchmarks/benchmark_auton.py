@@ -68,7 +68,7 @@ if __name__ == '__main__':
             'distribution' : ['LogNormal', 'Weibull'],
             'learning_rate' : [1e-4, 5e-4, 1e-3],
             'nodes_' : [[48], [64], [96], [256]],
-            'layers_': [1, 2],
+            'layers_': [1, 2, 3],
             'discount': [1/3, 3/4, 1],
             'batch_size': [128, 256],
             },
@@ -79,7 +79,7 @@ if __name__ == '__main__':
         'dcm': {
             'k' : [3, 4, 6],
             'nodes_' : [[48], [64], [96], [256]],
-            'layers_': [1, 2],
+            'layers_': [1, 2, 3],
             'batch_size': [128, 256],
             'use_activation': [True, False]
             },

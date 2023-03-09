@@ -74,20 +74,20 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=4000, type=int)
     parser.add_argument('--device', default='cuda', type=str)
     # Tuned parameters
-    parser.add_argument('--batch_size', default=[512, 1024])
+    parser.add_argument('--batch_size', default=[256, 512, 1024])
     parser.add_argument('--lr', default=[5e-4, 1e-3])
     parser.add_argument('--wd', default=[0, 1e-8, 1e-6, 1e-3, 1e-1])
     parser.add_argument('--batch_norm', default=[True])
     parser.add_argument('--layers', default=[1, 2])
-    parser.add_argument('--nodes', default=[256, 512])
+    parser.add_argument('--nodes', default=[128, 256, 512])
     parser.add_argument('--dropout', default=[
         0, 0.1, 0.4, 0.5
     ])
     parser.add_argument('--alpha', default=[
-        0.1, 0.2, 0.4, 0.8, 1
+        1e-1, 2e-1, 4e-1, 8e-1, 1
     ])
     parser.add_argument('--sigma', default=[
-        0.1, 0.25, 0.4, 0.8, 1, 2, 10
+        1e-1, 2.5e-1, 4e-1, 8e-1, 1, 2, 10
     ])
     parser.add_argument('--num_durations', default=[5, 10, 50, 100])
     parser.add_argument('--seed', default=1, type=int)
