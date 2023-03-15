@@ -55,9 +55,11 @@ if __name__ == '__main__':
     parser.add_argument('--norm', default='layer', help='normalization')
     parser.add_argument('--save_metric', default='LL_valid', type=str,
                         help='save_metric')
+    parser.add_argument('--seed', default=12345, type=int)
     args = parser.parse_args()
 
-    SEED = 12345
+    SEED = args.seed
+    MODEL_NAME = 'DHA'
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
     FLAGS = ', '.join(
@@ -392,9 +394,9 @@ if __name__ == '__main__':
 
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results/{}_{}_fold_results_({}).csv'.format(
+        './fold_results/fold_results_{}_{}_seed_{}.csv'.format(
             args.dataset,
-            'dha',
-            FLAGS
+            MODEL_NAME,
+            SEED
             )
         )

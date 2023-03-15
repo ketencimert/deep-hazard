@@ -89,7 +89,7 @@ if __name__ == "__main__":
     parser.add_argument('--sigma', default=[
         1e-1, 2.5e-1, 4e-1, 8e-1, 1, 2, 10
     ])
-    parser.add_argument('--num_durations', default=[5, 10, 50, 100])
+    parser.add_argument('--num_durations', default=[10, 50, 100])
     parser.add_argument('--seed', default=1, type=int)
     args = parser.parse_args()
 
