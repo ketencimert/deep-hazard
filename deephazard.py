@@ -38,18 +38,18 @@ if __name__ == '__main__':
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
-    parser.add_argument('--patience', default=2, type=float, help='patience')
-    parser.add_argument('--dtype', default='float64', type=str, help='dtype')
+    parser.add_argument('--patience', default=800, type=float, help='patience')
+    parser.add_argument('--dtype', default='float32', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
-    parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
-    parser.add_argument('--epochs', default=3, type=int, help='epochs')
+    parser.add_argument('--wd', default=1e-7, type=float, help='weight_decay')
+    parser.add_argument('--epochs', default=4000, type=int, help='epochs')
     parser.add_argument('--bs', default=256, type=int, help='batch_size')
-    parser.add_argument('--imps', default=256, type=int,
+    parser.add_argument('--imps', default=512, type=int,
                         help='importance_samples')
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
-    parser.add_argument('--p', default=0.5, type=float, help='dropout')
-    parser.add_argument('--d_hid', default=200, type=int, help='d_hid')
+    parser.add_argument('--p', default=0.4, type=float, help='dropout')
+    parser.add_argument('--d_hid', default=400, type=int, help='d_hid')
     parser.add_argument('--act', default='relu', type=str, help='activation')
     parser.add_argument('--norm', default='layer', help='normalization')
     parser.add_argument('--save_metric', default='LL_valid', type=str,
@@ -291,7 +291,6 @@ if __name__ == '__main__':
                 FLAGS
                 )
             )
-
 
         epoch_results = pd.DataFrame(epoch_results)
         os.makedirs('./epoch_results', exist_ok=True)

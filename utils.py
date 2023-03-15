@@ -222,8 +222,8 @@ def evaluate_model(model, batcher, quantiles, train, valid,
             survival = get_survival_curve(
                 model,
                 batcher,
-                [0, max([x[1] for x in valid])], 
-                imps=int(np.ceil(imps // min([x[1] for x in valid]))) + 10, 
+                [0, quantiles[-1]], 
+                imps=int(np.ceil(imps // min([x[1] for x in valid]))) + 100, 
                 slices=0.5
                 )
             ev = EvalSurv(
@@ -232,6 +232,54 @@ def evaluate_model(model, batcher, quantiles, train, valid,
                 np.asarray([x[0] for x in valid]), 
                 censor_surv='km'
                 )
+            idxs = survival.index
+            quantile_idxs = [
+                min(
+                    range(len(idxs)), key=lambda i: abs(idxs[i]-q)
+                    ) for q in quantiles
+                ]
+            # For C-Index and Brier Score
+            survival_quantile = []
+            for q in quantile_idxs:
+                survival_quantile.append(
+                    survival.iloc[q].values.reshape(1,-1)
+                    )
+            survival = np.concatenate(survival_quantile, 0).T
+            risk = 1 - survival
+
+            cis = []
+            brs = []
+            for i, _ in enumerate(quantiles):
+                cis.append(
+                    concordance_index_ipcw(
+                        train, valid, risk[:, i], quantiles[i]
+                    )[0]
+                )
+            #Remove larger test times to confirm with
+            #https://scikit-survival.readthedocs.io/en/stable/user_guide/evaluating-survival-models.html
+            max_val = max([k[1] for k in valid])
+            max_tr = max([k[1] for k in train])
+            while max_val > max_tr:
+                idx = [k[1] for k in valid].index(max_val)
+                valid = np.delete(valid, idx, 0)
+                survival = np.delete(survival, idx, 0)
+                risk = np.delete(risk, idx, 0)
+                max_val = max([k[1] for k in valid])
+    
+            brs.append(
+                brier_score(
+                    train, valid, survival, quantiles
+                )[1]
+            )
+    
+            roc_auc = []
+            for i, _ in enumerate(quantiles):
+                roc_auc.append(
+                    cumulative_dynamic_auc(
+                        train, valid, risk[:, i], quantiles[i]
+                    )[0]
+                )
+
         else:
             ev = None
 
