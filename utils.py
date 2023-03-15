@@ -222,7 +222,7 @@ def evaluate_model(model, batcher, quantiles, train, valid,
             survival = get_survival_curve(
                 model,
                 batcher,
-                [0, quantiles[-1]], 
+                [0, max([x[1] for x in valid])], 
                 imps=int(np.ceil(imps // min([x[1] for x in valid]))) + 100, 
                 slices=0.5
                 )

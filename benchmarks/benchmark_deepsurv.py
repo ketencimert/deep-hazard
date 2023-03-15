@@ -75,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=[5e-4, 1e-3])
     parser.add_argument('--wd', default=[0, 1e-8, 1e-6, 1e-3, 1e-1])
     parser.add_argument('--batch_norm', default=[True])
-    parser.add_argument('--layers', default=[1,2,3])
+    parser.add_argument('--layers', default=[2, 3])
     parser.add_argument('--nodes', default=[128, 256, 512])
     parser.add_argument('--dropout', default=[
         0, 1e-1, 2e-1, 4e-1, 5e-1
@@ -253,7 +253,7 @@ if __name__ == "__main__":
             ][
                 'Integrated Brier Score'
                 ].append(
-                    ev.brier_score(np.linspace(t.min(), t.max(), 100)
+                    ev.brier_score(np.linspace(t.min(), t.max(), 10)
                                    ).mean()
                     )
 
@@ -271,7 +271,7 @@ if __name__ == "__main__":
             'Integrated NBLL'
         ].append(
             ev.integrated_nbll(
-                np.linspace(t.min(), t.max(), 100)
+                np.linspace(t.min(), t.max(), 10)
                 ).mean()
             )    
 

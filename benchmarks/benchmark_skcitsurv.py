@@ -207,7 +207,7 @@ if __name__ == '__main__':
             ][
                 'Integrated Brier Score'
                 ].append(
-                    ev.brier_score(np.linspace(t.min(), t.max(), 100)
+                    ev.brier_score(np.linspace(t.min(), t.max(), 10)
                                    ).mean()
                     )
 
@@ -225,7 +225,7 @@ if __name__ == '__main__':
             'Integrated NBLL'
         ].append(
             ev.integrated_nbll(
-                np.linspace(t.min(), t.max(), 100)
+                np.linspace(t.min(), t.max(), 10)
                 ).mean()
             )
                     

@@ -51,7 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--only_shared', action='store_true')
     parser.add_argument('--p', default=0.4, type=float, help='dropout')
     parser.add_argument('--d_hid', default=400, type=int, help='d_hid')
-    parser.add_argument('--act', default='selu', type=str, help='activation')
+    parser.add_argument('--act', default='relu', type=str, help='activation')
     parser.add_argument('--norm', default='layer', help='normalization')
     parser.add_argument('--save_metric', default='LL_valid', type=str,
                         help='save_metric')
@@ -344,7 +344,7 @@ if __name__ == '__main__':
                 np.linspace(
                     min([x[1] for x in et_te]),
                     max([x[1] for x in et_te]), 
-                    100
+                    10
                     )
                 ).mean()
         )
@@ -364,7 +364,7 @@ if __name__ == '__main__':
                 np.linspace(
                     min([x[1] for x in et_te]), 
                     max([x[1] for x in et_te]), 
-                    100
+                    10
                     )
                 ).mean()
         )
