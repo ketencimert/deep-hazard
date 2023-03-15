@@ -48,10 +48,10 @@ if __name__ == '__main__':
                         help='importance_samples')
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
-    parser.add_argument('--only_shared', default=True)
+    parser.add_argument('--only_shared', action='store_true')
     parser.add_argument('--p', default=0.4, type=float, help='dropout')
     parser.add_argument('--d_hid', default=400, type=int, help='d_hid')
-    parser.add_argument('--act', default='relu', type=str, help='activation')
+    parser.add_argument('--act', default='selu', type=str, help='activation')
     parser.add_argument('--norm', default='layer', help='normalization')
     parser.add_argument('--save_metric', default='LL_valid', type=str,
                         help='save_metric')
@@ -333,7 +333,6 @@ if __name__ == '__main__':
                 'ROC AUC {} quantile'.format(horizon[1])
             ].append(roc_auc[horizon[0]][0])
 
-                
         fold_results[
             'Fold: {}'.format(fold)
         ][

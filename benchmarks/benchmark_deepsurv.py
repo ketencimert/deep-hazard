@@ -75,12 +75,12 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=[5e-4, 1e-3])
     parser.add_argument('--wd', default=[0, 1e-8, 1e-6, 1e-3, 1e-1])
     parser.add_argument('--batch_norm', default=[True])
-    parser.add_argument('--layers', default=[1,2])
+    parser.add_argument('--layers', default=[1,2,3])
     parser.add_argument('--nodes', default=[128, 256, 512])
     parser.add_argument('--dropout', default=[
         0, 1e-1, 2e-1, 4e-1, 5e-1
     ])
-    parser.add_argument('--seed', default=1, type=int)
+    parser.add_argument('--seed', default=12345, type=int)
     args = parser.parse_args()
 
     SEED = args.seed

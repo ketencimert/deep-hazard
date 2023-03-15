@@ -53,7 +53,7 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
     model.optimizer.set_lr(lr)
     model.optimizer.param_groups[0]['weight_decay'] = wd
 
-    callbacks = [tt.callbacks.EarlyStopping(patience=100)]
+    callbacks = [tt.callbacks.EarlyStopping(patience=50)]
     logs = model.fit(
         x_train,
         y_train,
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=[5e-4, 1e-3])
     parser.add_argument('--wd', default=[0, 1e-8, 1e-6, 1e-3, 1e-1])
     parser.add_argument('--batch_norm', default=[True])
-    parser.add_argument('--layers', default=[1, 2])
+    parser.add_argument('--layers', default=[1, 2, 3])
     parser.add_argument('--nodes', default=[128, 256, 512])
     parser.add_argument('--dropout', default=[
         0, 0.1, 0.4, 0.5

@@ -36,10 +36,12 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=4000, type=int)
     parser.add_argument('--model_name', default='cph', type=str)
     parser.add_argument('--dataset', default='support', type=str)
+    parser.add_argument('--seed', default=12345, type=int)
 
     args = parser.parse_args()
 
-    SEED = 12345
+    SEED = args.seed
+    MODEL_NAME = args.model_name
     random.seed(SEED), np.random.seed(SEED), torch.manual_seed(SEED)
 
     HYPERPARAMETER_SAMPLES = 100
@@ -280,8 +282,9 @@ if __name__ == '__main__':
 
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results/fold_results_{}_{}.csv'.format(
+        './fold_results/fold_results_{}_{}_seed_{}.csv'.format(
             args.dataset,
-            args.model_name
-            )
+            MODEL_NAME,
+            SEED
         )
+    )
