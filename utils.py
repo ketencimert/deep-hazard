@@ -17,6 +17,8 @@ from sksurv.metrics import (
 
 from tqdm import tqdm
 
+from pycox.evaluation import EvalSurv
+
 def build_times(times, slices):
     times_ = [times[0]]
     for i, j in enumerate(
@@ -90,11 +92,11 @@ def compute_hazard(model, x, times, imps, slices=1):
         hazard = torch.stack(hazard, -1)[:,indexes[0]: indexes[1]+1]
         return hazard
 
-def get_survival_curve(model, batcher, times, imps):
+def get_survival_curve(model, batcher, times, imps, slices=1):
     with torch.no_grad():
         survival = []
         for (x, t, e) in tqdm(
-                batcher, total=1024
+                batcher, total=len(batcher)
                 ):
             survival.append(
                 compute_survival(
@@ -102,11 +104,11 @@ def get_survival_curve(model, batcher, times, imps):
                     x,
                     times,
                     imps,
-                    slices=1,
+                    slices=slices,
                     )
                 )
         survival = torch.cat(survival).numpy()
-        times_, indexes = build_times(times, slices=1)
+        times_, indexes = build_times(times, slices=slices)
         survival = pd.DataFrame(
             survival.T, index=times_[indexes[0]:indexes[1]+1]
             )
@@ -116,7 +118,7 @@ def get_hazard_curve(model, batcher, times, imps, slices=1):
     with torch.no_grad():
         hazard = []
         for (x, t, e) in tqdm(
-                batcher, total=1024
+                batcher, total=len(batcher)
                 ):
             hazard.append(
                 compute_hazard(
@@ -135,7 +137,7 @@ def get_hazard_curve(model, batcher, times, imps, slices=1):
         return hazard
 
 def evaluate_model(model, batcher, quantiles, train, valid, 
-                   bs, imps, dtype, device):
+                   bs, imps, dtype, device, test=None):
 
     with torch.no_grad():
 
@@ -194,7 +196,6 @@ def evaluate_model(model, batcher, quantiles, train, valid,
                     train, valid, risk[:, i], quantiles[i]
                 )[0]
             )
-
         #Remove larger test times to confirm with
         #https://scikit-survival.readthedocs.io/en/stable/user_guide/evaluating-survival-models.html
         max_val = max([k[1] for k in valid])
@@ -205,13 +206,11 @@ def evaluate_model(model, batcher, quantiles, train, valid,
             survival = np.delete(survival, idx, 0)
             risk = np.delete(risk, idx, 0)
             max_val = max([k[1] for k in valid])
-
         brs.append(
             brier_score(
                 train, valid, survival, quantiles
             )[1]
         )
-
         roc_auc = []
         for i, _ in enumerate(quantiles):
             roc_auc.append(
@@ -219,5 +218,21 @@ def evaluate_model(model, batcher, quantiles, train, valid,
                     train, valid, risk[:, i], quantiles[i]
                 )[0]
             )
+        if test:
+            survival = get_survival_curve(
+                model,
+                batcher,
+                [0, max([x[1] for x in valid])], 
+                imps=int(np.ceil(imps // min([x[1] for x in valid]))) + 10, 
+                slices=0.5
+                )
+            ev = EvalSurv(
+                survival, 
+                np.asarray([x[1] for x in valid]), 
+                np.asarray([x[0] for x in valid]), 
+                censor_surv='km'
+                )
+        else:
+            ev = None
 
-        return np.mean(loglikelihoods), cis, brs, roc_auc
+        return np.mean(loglikelihoods), cis, brs, roc_auc, ev

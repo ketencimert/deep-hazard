@@ -80,8 +80,8 @@ if __name__ == "__main__":
         fontsize=30
         )
 
-    s = 8
-    e = 52
+    s = 4
+    e = 300
     k = range(0, 4)
     j = range(0, 3)
     idx = []

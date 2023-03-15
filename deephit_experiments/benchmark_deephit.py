@@ -78,7 +78,7 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # Fixed parameters
-    parser.add_argument('--dataset', default='metabric', type=str)
+    parser.add_argument('--dataset', default='support', type=str)
     parser.add_argument('--cv_folds', default=5, type=int)
     parser.add_argument('--epochs', default=4000, type=int)
     parser.add_argument('--device', default='cuda', type=str)

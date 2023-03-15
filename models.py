@@ -11,24 +11,6 @@ from torch.distributions.normal import Normal
 
 from itertools import chain
 
-class DeepHazardMixture(nn.Module):
-    def __init__(self, lambdanns, prior=None):
-        super().__init__()
-        self.lambdanns = nn.ModuleList(lambdanns)
-        self.prior = prior
-
-    def forward(self, c, x, t):
-        return self.lambdanns[c](x, t)
-
-    def forward_lambda(self, c, x, t):
-        return self.lambdanns[c](x, t)
-
-    def forward_prior(self, x):
-        return self.prior(x)
-
-    def mixture_size(self):
-        return len(self.lambdanns)
-
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
                  p=0.3, norm=False, dtype=torch.double):

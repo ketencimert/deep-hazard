@@ -38,11 +38,11 @@ if __name__ == '__main__':
     # device args
     parser.add_argument('--device', default='cuda', type=str)
     # optimization args
-    parser.add_argument('--patience', default=800, type=float, help='patience')
+    parser.add_argument('--patience', default=2, type=float, help='patience')
     parser.add_argument('--dtype', default='float64', type=str, help='dtype')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
     parser.add_argument('--wd', default=1e-5, type=float, help='weight_decay')
-    parser.add_argument('--epochs', default=4000, type=int, help='epochs')
+    parser.add_argument('--epochs', default=3, type=int, help='epochs')
     parser.add_argument('--bs', default=256, type=int, help='batch_size')
     parser.add_argument('--imps', default=256, type=int,
                         help='importance_samples')
@@ -154,7 +154,7 @@ if __name__ == '__main__':
 
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
-            norm=args.norm, activation=args.act
+            norm=args.norm, activation=args.act, dtype=dtype,
         ).to(args.device)
 
         optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,
@@ -207,7 +207,7 @@ if __name__ == '__main__':
 
             print("\nValidating Model...")
             # validate the model
-            val_loglikelihood, cis, brs, roc_auc = evaluate_model(
+            val_loglikelihood, cis, brs, roc_auc, _ = evaluate_model(
                 lambdann.eval(), valid_dataloader, times, et_tr, et_val,
                 args.bs, args.imps, dtype, args.device
             )
@@ -257,7 +257,6 @@ if __name__ == '__main__':
                 STOP_REASON = 'EARLY STOP'
                 break
 
-
         fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 5))
         ax[0][0].plot(epoch_results['LL_train'], color='b', label="LL_train")
         ax[0][0].plot(epoch_results['LL_valid'], color='r', label="LL_valid")
@@ -306,9 +305,9 @@ if __name__ == '__main__':
             )
 
         print("\nEvaluating Best Model...")
-        test_loglikelihood, cis, brs, roc_auc = evaluate_model(
+        test_loglikelihood, cis, brs, roc_auc, ev = evaluate_model(
             best_lambdann.eval(), test_dataloader, times, et_tr, et_te,
-            args.bs, args.imps, dtype, args.device
+            args.bs, args.imps, dtype, args.device, True
         )
         print("\nTest Loglikelihood: {}".format(test_loglikelihood))
         for horizon in enumerate(horizons):
@@ -332,6 +331,42 @@ if __name__ == '__main__':
             ][
                 'ROC AUC {} quantile'.format(horizon[1])
             ].append(roc_auc[horizon[0]][0])
+
+                
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Integrated Brier Score'
+        ].append(
+            ev.brier_score(
+                np.linspace(
+                    min([x[1] for x in et_te]),
+                    max([x[1] for x in et_te]), 
+                    100
+                    )
+                ).mean()
+        )
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Antolini C-Index'
+        ].append(
+            ev.concordance_td('antolini')
+        )
+        fold_results[
+            'Fold: {}'.format(fold)
+        ][
+            'Integrated NBLL'
+        ].append(
+            ev.integrated_nbll(
+                np.linspace(
+                    min([x[1] for x in et_te]), 
+                    max([x[1] for x in et_te]), 
+                    100
+                    )
+                ).mean()
+        )
+
         fold_results[
             'Fold: {}'.format(fold)
         ][
