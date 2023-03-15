@@ -42,7 +42,7 @@ def compute_survival(model, x, times, imps, slices=1):
     computes the survival curve for one instance using DP returns 1xsurvival time
     """
     with torch.no_grad():
-        dtype = model.feature_net[0].weight.dtype
+        dtype = model.shared_net[0].weight.dtype
         quantiles_, indexes = build_times(
             times,
             slices

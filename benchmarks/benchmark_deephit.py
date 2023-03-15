@@ -53,7 +53,7 @@ def train_model(nodes, layers, batch_norm, dropout, alpha, sigma, lr, wd,
     model.optimizer.set_lr(lr)
     model.optimizer.param_groups[0]['weight_decay'] = wd
 
-    callbacks = [tt.callbacks.EarlyStopping(patience=50)]
+    callbacks = [tt.callbacks.EarlyStopping(patience=100)]
     logs = model.fit(
         x_train,
         y_train,

@@ -48,6 +48,7 @@ if __name__ == '__main__':
                         help='importance_samples')
     # model, encoder-decoder args
     parser.add_argument('--n_layers', default=2, type=int, help='n_layers')
+    parser.add_argument('--only_shared', default=True)
     parser.add_argument('--p', default=0.4, type=float, help='dropout')
     parser.add_argument('--d_hid', default=400, type=int, help='d_hid')
     parser.add_argument('--act', default='relu', type=str, help='activation')
@@ -155,6 +156,7 @@ if __name__ == '__main__':
         lambdann = LambdaNN(
             d_in, D_OUT, d_hid, args.n_layers, p=args.p,
             norm=args.norm, activation=args.act, dtype=dtype,
+            only_shared=args.only_shared
         ).to(args.device)
 
         optimizer = optim.Adam(lambdann.parameters(), lr=args.lr,

@@ -13,7 +13,7 @@ from itertools import chain
 
 class LambdaNN(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers, activation="relu",
-                 p=0.3, norm=False, dtype=torch.double):
+                 p=0.3, norm=False, dtype=torch.double, only_shared=False):
         super().__init__()
 
         act_fn = {
@@ -36,55 +36,59 @@ class LambdaNN(nn.Module):
             norm = False
 
         self.noise = nn.Dropout(p)
-
-        self.feature_net = list(
-                chain(
-                    *[
-                        [
-                            nn.Linear(
-                                d_in if ii == 0 else d_hid,
-                                d_hid if ii + 1 == n_layers else d_hid,
-                                dtype=dtype
-                            ),
-                            nn.Identity() if ii + 1 == n_layers else act_fn,
-                            nn.Identity() if not norm else norm_fn,
-                            nn.Dropout(p)
+        if not only_shared:
+            self.feature_net = list(
+                    chain(
+                        *[
+                            [
+                                nn.Linear(
+                                    d_in if ii == 0 else d_hid,
+                                    d_hid if ii + 1 == n_layers else d_hid,
+                                    dtype=dtype
+                                ),
+                                nn.Identity() if ii + 1 == n_layers else act_fn,
+                                nn.Identity() if not norm else norm_fn,
+                                nn.Dropout(p)
+                            ]
+                            for ii in range(n_layers)
                         ]
-                        for ii in range(n_layers)
-                    ]
+                    )
                 )
-            )
-        self.feature_net.pop(-1)
-        self.feature_net.pop(-1)
-        self.feature_net = nn.Sequential(*self.feature_net)
+            self.feature_net.pop(-1)
+            self.feature_net.pop(-1)
+            self.feature_net = nn.Sequential(*self.feature_net)
 
-        self.time_net = list(
-                chain(
-                    *[
-                        [
-                            nn.Linear(
-                                1 if ii == 0 else d_hid,
-                                d_hid if ii + 1 == n_layers else d_hid,
-                                dtype=dtype
-                            ),
-                            nn.Identity() if ii + 1 == n_layers else act_fn,
-                            nn.Identity() if not norm else norm_fn,
-                            nn.Dropout(p)
+            self.time_net = list(
+                    chain(
+                        *[
+                            [
+                                nn.Linear(
+                                    1 if ii == 0 else d_hid,
+                                    d_hid if ii + 1 == n_layers else d_hid,
+                                    dtype=dtype
+                                ),
+                                nn.Identity() if ii + 1 == n_layers else act_fn,
+                                nn.Identity() if not norm else norm_fn,
+                                nn.Dropout(p)
+                            ]
+                            for ii in range(n_layers)
                         ]
-                        for ii in range(n_layers)
-                    ]
+                    )
                 )
-            )
-        self.time_net.pop(-1)
-        self.time_net.pop(-1)
-        self.time_net = nn.Sequential(*self.time_net)
+            self.time_net.pop(-1)
+            self.time_net.pop(-1)
+            self.time_net = nn.Sequential(*self.time_net)
+            d_shared = int(2*d_hid)
+        else:
+            d_shared = d_in + 1
 
+        self.only_shared = only_shared
         self.shared_net = list(
                 chain(
                     *[
                         [
                             nn.Linear(
-                                int(2*d_hid) if ii == 0 else d_hid,
+                                d_shared if ii == 0 else d_hid,
                                 d_out if ii + 1 == n_layers else d_hid,
                                 dtype=dtype
                             ),
@@ -103,14 +107,18 @@ class LambdaNN(nn.Module):
     def forward(self, x, t):
 
         x = self.noise(x)
-        x = self.feature_net(x)
+        
+        if not self.only_shared:
+            x = self.feature_net(x)
 
         if self.training:
 
             t = Normal(loc=t, scale=1).sample()
-
-        t = self.time_net(t.reshape(-1,1))
-
+        
+        if not self.only_shared:
+            t = self.time_net(t.reshape(-1,1))
+        else:
+            t = t.reshape(-1,1)
         if x.size(0) != t.size(0):
 
             x = x.repeat_interleave(t.size(0) // x.size(0), 0)
