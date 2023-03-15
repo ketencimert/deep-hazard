@@ -40,8 +40,8 @@ if __name__ == '__main__':
     # optimization args
     parser.add_argument('--patience', default=800, type=float, help='patience')
     parser.add_argument('--dtype', default='float32', type=str, help='dtype')
-    parser.add_argument('--lr', default=1e-3, type=float, help='learning_rate')
-    parser.add_argument('--wd', default=1e-7, type=float, help='weight_decay')
+    parser.add_argument('--lr', default=2e-3, type=float, help='learning_rate')
+    parser.add_argument('--wd', default=1e-6, type=float, help='weight_decay')
     parser.add_argument('--epochs', default=4000, type=int, help='epochs')
     parser.add_argument('--bs', default=256, type=int, help='batch_size')
     parser.add_argument('--imps', default=512, type=int,
