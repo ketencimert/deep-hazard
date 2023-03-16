@@ -394,9 +394,10 @@ if __name__ == '__main__':
 
     os.makedirs('./fold_results', exist_ok=True)
     fold_results.to_csv(
-        './fold_results/fold_results_{}_{}_seed_{}.csv'.format(
+        './fold_results/fold_results_{}_{}_seed_{}_imps_{}.csv'.format(
             args.dataset,
             MODEL_NAME,
-            SEED
+            SEED,
+            args.imps
             )
         )

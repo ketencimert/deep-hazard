@@ -30,7 +30,6 @@ from sksurv.metrics import (
 
 from datasets import load_dataset
 
-
 def train_model(nodes, layers, batch_norm, dropout, lr, wd,
                 batch_size, **extras
                 ):
